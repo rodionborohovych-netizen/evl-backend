@@ -20,6 +20,7 @@ OPENCHARGEMAP_API_KEY = os.getenv("OPENCHARGEMAP_API_KEY", "")
 GOOGLE_PLACES_API_KEY = os.getenv("GOOGLE_PLACES_API_KEY", "")
 
 print(f"API Keys: OCM={bool(OPENCHARGEMAP_API_KEY)}, Google={bool(GOOGLE_PLACES_API_KEY)}")
+# Redeploy trigger
 
 class Location(BaseModel):
     address: str
