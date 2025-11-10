@@ -1,10 +1,10 @@
  (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/main-robust.py b/main-robust.py
+diff --git a/main.py b/main.py
 new file mode 100644
-index 0000000000000000000000000000000000000000..7f7bf599e1b7bdd974bf9f99dc4082855736617e
+index 0000000000000000000000000000000000000000..e857f3855d5271fac935f3400b5fa173154f42ff
 --- /dev/null
-+++ b/main-robust.py
-@@ -0,0 +1,450 @@
++++ b/main.py
+@@ -0,0 +1,532 @@
 +"""Robust EVL backend service.
 +
 +Provides a FastAPI application that aggregates EV charging station
@@ -135,6 +135,24 @@ index 0000000000000000000000000000000000000000..7f7bf599e1b7bdd974bf9f99dc408285
 +    return radius * c
 +
 +
++def _load_openchargemap_key() -> Optional[str]:
++    """Return the configured OpenChargeMap API key, checking common env names."""
++
++    env_names = [
++        "OPENCHARGEMAP_API_KEY",
++        "OPENCHARGEMAP_KEY",
++        "OCM_API_KEY",
++        "OPEN_CHARGE_MAP_API_KEY",
++    ]
++    for name in env_names:
++        value = os.getenv(name)
++        if value:
++            if name != "OPENCHARGEMAP_API_KEY":
++                LOGGER.info("🔑 Using OpenChargeMap key from %s", name)
++            return value
++    return None
++
++
 +async def fetch_openchargemap(
 +    client: httpx.AsyncClient,
 +    latitude: float,
@@ -152,40 +170,93 @@ index 0000000000000000000000000000000000000000..7f7bf599e1b7bdd974bf9f99dc408285
 +    else:
 +        LOGGER.info("🔑 OpenChargeMap: Trying WITH API key…")
 +
-+    params = {
-+        "output": "json",
-+        "latitude": latitude,
-+        "longitude": longitude,
-+        "distance": round(miles_to_km(radius_miles), 3),
-+        "distanceunit": "KM",
-+        "maxresults": 200,
-+    }
++    primary_max = 200 if api_key else 100
++    attempts = [primary_max]
++    fallback_caps = [100, 75, 50]
++    for cap in fallback_caps:
++        if cap < primary_max:
++            attempts.append(cap)
++
 +    headers = {"User-Agent": USER_AGENT}
 +    if api_key:
 +        headers["X-API-Key"] = api_key
-+        params["key"] = api_key
 +
-+    try:
-+        response = await client.get(
-+            OPENCHARGEMAP_ENDPOINT,
-+            params=params,
-+            headers=headers,
-+            timeout=45.0,
-+        )
-+        response.raise_for_status()
-+        results = response.json()
-+    except httpx.HTTPStatusError as exc:  # pragma: no cover - network issues
-+        status_code = exc.response.status_code
-+        LOGGER.warning("⚠️ OpenChargeMap failed (%s)", status_code)
-+        meta.update({
-+            "error": exc.response.text[:200],
-+            "status_code": status_code,
-+        })
++    results: List[Dict[str, Any]] = []
++    last_error: Optional[Dict[str, Any]] = None
++    for limit in attempts:
++        params = {
++            "output": "json",
++            "latitude": latitude,
++            "longitude": longitude,
++            "distance": round(miles_to_km(radius_miles), 3),
++            "distanceunit": "KM",
++            "maxresults": limit,
++        }
++        if api_key:
++            params["key"] = api_key
++        params.setdefault("client", "evl-backend")
++
++        meta["requested_maxresults"] = limit
++        try:
++            response = await client.get(
++                OPENCHARGEMAP_ENDPOINT,
++                params=params,
++                headers=headers,
++                timeout=45.0,
++            )
++            response.raise_for_status()
++            if not response.content or not response.content.strip():
++                LOGGER.info(
++                    "⚠️ OpenChargeMap returned an empty payload (status=%s, maxresults=%d)",
++                    response.status_code,
++                    limit,
++                )
++                meta.setdefault("notes", []).append(
++                    {
++                        "status_code": response.status_code,
++                        "maxresults": limit,
++                        "message": "empty response",
++                    }
++                )
++                results = []
++                break
++            try:
++                results = response.json()
++            except ValueError as exc:  # pragma: no cover - upstream sent non-JSON
++                body_preview = response.text[:200]
++                LOGGER.warning(
++                    "⚠️ OpenChargeMap returned unreadable payload (maxresults=%d): %s",
++                    limit,
++                    exc,
++                )
++                last_error = {
++                    "error": f"invalid json: {exc}",
++                    "status_code": response.status_code,
++                    "maxresults": limit,
++                    "body_preview": body_preview,
++                }
++                continue
++            break
++        except httpx.HTTPStatusError as exc:  # pragma: no cover - network issues
++            status_code = exc.response.status_code
++            LOGGER.warning("⚠️ OpenChargeMap failed (%s) (maxresults=%d)", status_code, limit)
++            last_error = {
++                "error": exc.response.text[:200],
++                "status_code": status_code,
++                "maxresults": limit,
++            }
++            continue
++        except Exception as exc:  # pragma: no cover - network issues
++            LOGGER.warning("⚠️ OpenChargeMap failed: %s (maxresults=%d)", exc, limit)
++            last_error = {"error": str(exc), "maxresults": limit}
++            continue
++    else:
++        if last_error:
++            meta.update(last_error)
 +        return [], meta
-+    except Exception as exc:  # pragma: no cover - network issues
-+        LOGGER.warning("⚠️ OpenChargeMap failed: %s", exc)
-+        meta["error"] = str(exc)
-+        return [], meta
++
++    if last_error and last_error.get("maxresults") != meta.get("requested_maxresults"):
++        meta.setdefault("fallback_attempts", []).append(last_error)
 +
 +    chargers: List[ChargerLocation] = []
 +    for item in results:
@@ -220,6 +291,11 @@ index 0000000000000000000000000000000000000000..7f7bf599e1b7bdd974bf9f99dc408285
 +
 +    LOGGER.info("✅ OpenChargeMap: %d POIs", len(chargers))
 +    meta.update({"worked": True, "count": len(chargers)})
++    if not chargers:
++        meta.setdefault("notes", []).append({
++            "message": "OpenChargeMap returned zero results",
++            "maxresults": meta.get("requested_maxresults"),
++        })
 +    return chargers, meta
 +
 +
@@ -330,7 +406,7 @@ index 0000000000000000000000000000000000000000..7f7bf599e1b7bdd974bf9f99dc408285
 +    longitude: float,
 +    radius_miles: float,
 +) -> Tuple[List[ChargerLocation], Dict[str, Dict[str, Any]]]:
-+    openchargemap_key = os.getenv("OPENCHARGEMAP_API_KEY")
++    openchargemap_key = _load_openchargemap_key()
 +    google_key = os.getenv("GOOGLE_PLACES_API_KEY") or os.getenv("GOOGLE_MAPS_API_KEY")
 +
 +    async with httpx.AsyncClient() as client:
@@ -432,12 +508,18 @@ index 0000000000000000000000000000000000000000..7f7bf599e1b7bdd974bf9f99dc408285
 +
 +@app.get("/")
 +async def root() -> Dict[str, str]:
-+    return {"message": "EVL backend is running"}
++    openchargemap_key = _load_openchargemap_key()
++    google_key = os.getenv("GOOGLE_PLACES_API_KEY", "") or os.getenv("GOOGLE_MAPS_API_KEY", "")
++    return {
++        "message": "EVL backend is running",
++        "openchargemap_key_detected": bool(openchargemap_key),
++        "google_key_detected": bool(google_key),
++    }
 +
 +
 +@app.get("/test")
 +async def test() -> Dict[str, Dict[str, Any]]:
-+    openchargemap_key = os.getenv("OPENCHARGEMAP_API_KEY", "")
++    openchargemap_key = _load_openchargemap_key() or ""
 +    google_key = os.getenv("GOOGLE_PLACES_API_KEY", "") or os.getenv("GOOGLE_MAPS_API_KEY", "")
 +    return {
 +        "api_keys_set": {
