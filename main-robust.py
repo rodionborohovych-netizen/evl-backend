@@ -179,3 +179,15 @@ async def analyze(address: str = Query(...), radius: int = Query(5)):
         "roi_projection": {"estimated_annual_revenue": int(50000 * score), "payback_period_years": round(25000 / max(50000 * score / 12, 1000), 1), "monthly_revenue": int(50000 * score / 12)},
         "recommendations": [{"text": f"Found {len(chargers)} chargers"}, {"text": f"{nearby} within 2km"}]
     }
+    @app.get("/test")
+async def test():
+    return {
+        "api_keys_set": {
+            "openchargemap": bool(OPENCHARGEMAP_API_KEY),
+            "google": bool(GOOGLE_PLACES_API_KEY)
+        },
+        "api_key_values": {
+            "ocm_length": len(OPENCHARGEMAP_API_KEY) if OPENCHARGEMAP_API_KEY else 0,
+            "google_length": len(GOOGLE_PLACES_API_KEY) if GOOGLE_PLACES_API_KEY else 0
+        }
+    }
