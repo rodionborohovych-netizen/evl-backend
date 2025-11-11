@@ -2,7 +2,6 @@ from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
 import os
-import math
 
 app = FastAPI()
 
@@ -16,13 +15,12 @@ app.add_middleware(
 
 @app.get("/")
 def root():
-    return {"status": "ok", "version": "3.0"}
+    return {"status": "ok", "version": "3.1"}
 
 @app.get("/api/analyze")
 async def analyze(address: str = Query(...), radius: int = Query(5)):
     ocm_key = os.getenv("OPENCHARGEMAP_API_KEY", "")
     
-    # Geocode
     async with httpx.AsyncClient() as client:
         r = await client.get(
             "https://nominatim.openstreetmap.org/search",
@@ -34,7 +32,6 @@ async def analyze(address: str = Query(...), radius: int = Query(5)):
         lat = float(data[0]["lat"])
         lon = float(data[0]["lon"])
     
-    # Get chargers
     chargers = []
     async with httpx.AsyncClient() as client:
         params = {
