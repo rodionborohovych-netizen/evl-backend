@@ -891,8 +891,3 @@ def get_data_sources():
         "message": "Load data_sources.yaml for complete catalog",
         "configured_sources": 15
     }
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-httpx==0.25.1
-pyyaml==6.0.1
-pip install -r requirements.txt
