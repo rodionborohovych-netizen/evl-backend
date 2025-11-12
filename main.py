@@ -18,11 +18,22 @@ import xml.etree.ElementTree as ET
 import csv
 import io
 
+# Foundation Package for Data Quality Tracking
+from foundation.core import (
+    track_fetch,
+    validate_response,
+    init_database
+)
+
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="EVL v10.1 - Real API Integrations")
+
+# Initialize data quality database
+init_database()
+logger.info("✅ Data quality tracking initialized")
 
 app.add_middleware(
     CORSMiddleware,
@@ -54,6 +65,8 @@ def distance(lat1, lon1, lat2, lon2):
 
 # ==================== 1. ENTSO-E (EU GRID DATA) - REAL ====================
 
+@track_fetch("entsoe", "ENTSO-E Grid Data")
+@validate_response("entsoe")
 async def get_entsoe_grid_data(country_code: str) -> Dict[str, Any]:
     """
     REAL ENTSO-E Transparency Platform integration
@@ -198,6 +211,8 @@ async def get_entsoe_grid_data(country_code: str) -> Dict[str, Any]:
 
 # ==================== 2. NATIONAL GRID ESO (UK) - REAL ====================
 
+@track_fetch("national_grid_eso", "National Grid ESO")
+@validate_response("national_grid_eso")
 async def get_national_grid_eso_real(lat: float, lon: float) -> Dict[str, Any]:
     """
     REAL National Grid ESO data - Connection Queue
@@ -293,6 +308,8 @@ async def get_national_grid_eso_real(lat: float, lon: float) -> Dict[str, Any]:
 
 # ==================== 3. DFT VEHICLE LICENSING (UK) - REAL ====================
 
+@track_fetch("dft_vehicle_licensing", "DfT Vehicle Licensing")
+@validate_response("dft_vehicle_licensing")
 async def get_dft_vehicle_licensing_real() -> Dict[str, Any]:
     """
     REAL UK Vehicle Licensing Statistics
@@ -370,6 +387,8 @@ def parse_dft_data(data: Dict) -> Dict[str, Any]:
 
 # ==================== 4. ONS (UK DEMOGRAPHICS) - REAL ====================
 
+@track_fetch("ons_demographics", "ONS Demographics")
+@validate_response("ons_demographics")
 async def get_ons_real(lat: float, lon: float) -> Dict[str, Any]:
     """
     REAL ONS (Office for National Statistics) data
@@ -558,6 +577,8 @@ async def get_osm_comprehensive(lat: float, lon: float) -> Dict[str, Any]:
         logger.error(f"OSM Error: {e}")
         return None
 
+@track_fetch("dft_traffic", "UK DfT Traffic")
+@validate_response("dft_traffic")
 async def get_uk_dft_traffic(lat: float, lon: float) -> Dict[str, Any]:
     """UK DfT traffic (same as v9.0)"""
     try:
@@ -586,6 +607,8 @@ async def get_uk_dft_traffic(lat: float, lon: float) -> Dict[str, Any]:
         logger.error(f"UK DfT Error: {e}")
         return None
 
+@track_fetch("openchargemap", "OpenChargeMap")
+@validate_response("openchargemap")
 async def get_openchargemap_data(lat: float, lon: float, radius: int) -> Dict[str, Any]:
     """OpenChargeMap (same as v9.0)"""
     try:
