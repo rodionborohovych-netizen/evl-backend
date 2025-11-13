@@ -1,5 +1,9 @@
-fastapi==0.115.0
-uvicorn[standard]==0.30.6
-httpx==0.27.0
-pyyaml==6.0.1
-python-multipart==0.0.9
+# EVL Foundation Package Requirements
+
+# Core dependencies
+sqlalchemy>=2.0.0
+
+# Already have these in main EVL project:
+# httpx>=0.24.0
+# fastapi>=0.100.0
+# pyyaml>=6.0
