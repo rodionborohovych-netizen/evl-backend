@@ -1,4 +1,8 @@
-# 🗃️ EVL Foundation Package
+"""
+README for EVL Foundation Package
+"""
+
+CONTENT = """# 🗃️ EVL Foundation Package
 
 Production-grade data quality infrastructure for EVL v10.1+
 
@@ -271,15 +275,15 @@ session = get_session()
 # Last 24 hours
 cutoff = datetime.utcnow() - timedelta(hours=24)
 
-total = session.query(FetchMetadata)\
-    .filter(FetchMetadata.source_id == "entsoe")\
-    .filter(FetchMetadata.fetched_at >= cutoff)\
+total = session.query(FetchMetadata)\\
+    .filter(FetchMetadata.source_id == "entsoe")\\
+    .filter(FetchMetadata.fetched_at >= cutoff)\\
     .count()
 
-successes = session.query(FetchMetadata)\
-    .filter(FetchMetadata.source_id == "entsoe")\
-    .filter(FetchMetadata.fetched_at >= cutoff)\
-    .filter(FetchMetadata.status_code == 200)\
+successes = session.query(FetchMetadata)\\
+    .filter(FetchMetadata.source_id == "entsoe")\\
+    .filter(FetchMetadata.fetched_at >= cutoff)\\
+    .filter(FetchMetadata.status_code == 200)\\
     .count()
 
 success_rate = successes / total if total > 0 else 0
@@ -295,9 +299,9 @@ from sqlalchemy import func
 scores = session.query(
     func.date_trunc('hour', FetchMetadata.fetched_at).label('hour'),
     func.avg(FetchMetadata.data_quality_score).label('avg_quality')
-)\
-.filter(FetchMetadata.source_id == "entsoe")\
-.group_by('hour')\
+)\\
+.filter(FetchMetadata.source_id == "entsoe")\\
+.group_by('hour')\\
 .all()
 
 for hour, quality in scores:
@@ -473,9 +477,9 @@ DATABASE_URL=postgresql://user:pass@host:5432/db
 from core import get_session, FetchMetadata
 
 session = get_session()
-recent = session.query(FetchMetadata)\
-    .order_by(FetchMetadata.fetched_at.desc())\
-    .limit(10)\
+recent = session.query(FetchMetadata)\\
+    .order_by(FetchMetadata.fetched_at.desc())\\
+    .limit(10)\\
     .all()
 
 for fetch in recent:
@@ -492,8 +496,8 @@ from sqlalchemy import func
 quality = session.query(
     FetchMetadata.source_id,
     func.avg(FetchMetadata.data_quality_score).label('avg_quality')
-)\
-.group_by(FetchMetadata.source_id)\
+)\\
+.group_by(FetchMetadata.source_id)\\
 .all()
 
 for source, score in quality:
@@ -507,8 +511,8 @@ for source, score in quality:
 speed = session.query(
     FetchMetadata.source_id,
     func.avg(FetchMetadata.response_time_ms).label('avg_ms')
-)\
-.group_by(FetchMetadata.source_id)\
+)\\
+.group_by(FetchMetadata.source_id)\\
 .all()
 
 for source, ms in speed:
@@ -592,3 +596,9 @@ async def get_new_source_data():
 **Built with ❤️ for production-grade data quality**
 
 Questions? Check `examples.py` or see the Phase 2 Roadmap!
+"""
+
+if __name__ == "__main__":
+    with open("/home/claude/foundation/README.md", "w") as f:
+        f.write(CONTENT)
+    print("✅ README.md created")
