@@ -1,9 +1,0 @@
-# EVL Foundation Package Requirements
-
-# Core dependencies
-sqlalchemy>=2.0.0
-
-# Already have these in main EVL project:
-# httpx>=0.24.0
-# fastapi>=0.100.0
-# pyyaml>=6.0
