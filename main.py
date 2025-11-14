@@ -954,7 +954,7 @@ async def analyze(
                 sources_active.append(key)
     
     # ENTSO-E insights
-    if comprehensive_data["entsoe_grid"] and comprehensive_data["entsoe_grid"].get("available"):
+    if isinstance(comprehensive_data.get("entsoe_grid"), dict) and comprehensive_data["entsoe_grid"].get("available"):
         entsoe = comprehensive_data["entsoe_grid"]
         recommendations.append({
             "text": f"⚡ Grid: {entsoe['renewable_share']*100:.1f}% renewable energy ({entsoe['renewable_generation_mw']:,} MW). {entsoe['ev_charging_recommendation'].title()} time for EV charging.",
@@ -962,7 +962,7 @@ async def analyze(
         })
     
     # National Grid ESO insights
-    if comprehensive_data["national_grid_eso"] and comprehensive_data["national_grid_eso"].get("available"):
+    if isinstance(comprehensive_data.get("national_grid_eso"), dict) and comprehensive_data["national_grid_eso"].get("available"):
         grid = comprehensive_data["national_grid_eso"]
         nearest = grid["nearest_connection"]
         recommendations.append({
@@ -971,7 +971,7 @@ async def analyze(
         })
     
     # DfT Vehicle Licensing insights
-    if comprehensive_data["vehicle_licensing"] and comprehensive_data["vehicle_licensing"].get("available"):
+    if isinstance(comprehensive_data.get("vehicle_licensing"), dict) and comprehensive_data["vehicle_licensing"].get("available"):
         vl = comprehensive_data["vehicle_licensing"]
         recommendations.append({
             "text": f"🚗 UK Fleet: {vl['bevs']:,} BEVs ({vl['ev_percentage']:.2f}% of fleet), growing {vl.get('growth_yoy_bev', 0):.1f}% YoY",
@@ -979,7 +979,7 @@ async def analyze(
         })
     
     # ONS Demographics insights
-    if comprehensive_data["ons_demographics"] and comprehensive_data["ons_demographics"].get("available"):
+    if isinstance(comprehensive_data.get("ons_demographics"), dict) and comprehensive_data["ons_demographics"].get("available"):
         ons = comprehensive_data["ons_demographics"]
         recommendations.append({
             "text": f"📊 Demographics: {ons['region']}, median income £{ons['estimated_median_income_gbp']:,}/year, {ons['car_ownership_rate']*100:.0f}% car ownership",
@@ -987,7 +987,7 @@ async def analyze(
         })
     
     # Traffic insights
-    if comprehensive_data["traffic"] and comprehensive_data["traffic"].get("available"):
+    if isinstance(comprehensive_data.get("traffic"), dict) and comprehensive_data["traffic"].get("available"):
         traffic = comprehensive_data["traffic"]
         recommendations.append({
             "text": f"🚦 Traffic: {traffic['aadt']:,} vehicles/day on {traffic['road_name']}",
