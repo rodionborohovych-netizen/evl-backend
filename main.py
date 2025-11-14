@@ -5,6 +5,7 @@ Implementing: ENTSO-E, National Grid ESO, DfT Vehicle Licensing, ONS
 
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from v2.api_v2 import router_v2
 import httpx
 import os
 import math
@@ -30,6 +31,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="EVL v10.1 - Real API Integrations")
+app.include_router(router_v2)
 
 # Initialize data quality database
 init_database()
