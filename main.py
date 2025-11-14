@@ -773,14 +773,14 @@ def calculate_comprehensive_scores(data: Dict[str, Any],
     traffic_score = 0.6
     if osm and osm["roads"]:
         traffic_score = osm["roads"]["score"]
-    if traffic and traffic.get("available"):
+    if isinstance(traffic, dict) and traffic.get("available"):
         traffic_score = min(traffic_score + min(traffic["aadt"] / 80000, 0.3), 1.0)
     
     # Demand Score (enhanced with ONS data)
     demand_score = 0.5
     if osm and osm["land_use"]["primary"] in ["retail", "commercial"]:
         demand_score = 0.8
-    if ons and ons.get("available"):
+    if isinstance(ons, dict) and ons.get("available"):
         if ons["estimated_median_income_gbp"] > 35000:
             demand_score = min(demand_score + 0.15, 1.0)
         if ons["is_urban"]:
@@ -791,16 +791,16 @@ def calculate_comprehensive_scores(data: Dict[str, Any],
     if eafo:
         maturity = eafo["market_maturity"]
         ev_market_score = 0.95 if maturity == "leading" else 0.8 if maturity == "high" else 0.6
-    if vehicle_licensing and vehicle_licensing.get("available"):
+    if isinstance(vehicle_licensing, dict) and vehicle_licensing.get("available"):
         if vehicle_licensing["ev_percentage"] > 5:
             ev_market_score = min(ev_market_score + 0.1, 1.0)
     
     # Grid Score (enhanced with real ENTSO-E and National Grid data)
     grid_score = 0.6
-    if grid_eso and grid_eso.get("available"):
+    if isinstance(grid_eso, dict) and grid_eso.get("available"):
         feasibility = grid_eso["feasibility"]
         grid_score = 0.95 if feasibility == "excellent" else 0.85 if feasibility == "good" else 0.7
-    if entsoe and entsoe.get("available"):
+    if isinstance(entsoe, dict) and entsoe.get("available"):
         if entsoe["renewable_share"] > 0.5:
             grid_score = min(grid_score + 0.05, 1.0)
     
