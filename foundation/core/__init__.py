@@ -90,3 +90,17 @@ __all__ = [
     "ValidationError",
     "DATA_CONTRACTS",
 ]
+# Add to imports:
+from .fetchers import (
+    fetch_all_data,
+    FetchResult,
+    get_data_sources_summary
+)
+
+# Add to __all__:
+__all__ = [
+    # ... existing exports ...
+    "fetch_all_data",
+    "FetchResult", 
+    "get_data_sources_summary",
+]
