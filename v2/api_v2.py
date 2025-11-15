@@ -1,13 +1,12 @@
 """
-EVL v2.0 - Main API Endpoint (REAL DATA VERSION)
-=================================================
+EVL v2.0 - Main API Endpoint with Real Data Integration
+========================================================
 
-Complete integration with real data sources and quality tracking.
+Integrated with real data sources from foundation.core.fetchers
 """
 
 from fastapi import APIRouter, HTTPException
 from typing import Dict, Any
-import asyncio
 
 from .models_v2 import (
     AnalyzeLocationRequestV2,
@@ -55,10 +54,8 @@ from .roi_v2 import (
     generate_financial_summary
 )
 
-# Import our real data fetchers
-import sys
-sys.path.append('/home/claude')
-from fetchers import (
+# Import real data fetchers from foundation package
+from foundation.core.fetchers import (
     fetch_all_data,
     get_data_sources_summary,
     FetchResult
@@ -109,15 +106,18 @@ def estimate_ev_density(dft_data: Dict, demographics_data: Dict) -> float:
     ev_percent = dft_data.get("ev_percent", 4.5)
     
     # Apply to local area
-    # Assume 650 cars per 1000 people (UK average)
     population = demographics_data.get("population", 8000)
     car_ownership = demographics_data.get("car_ownership_percent", 65) / 100
     
+    # Assume 650 cars per 1000 people (UK average)
     total_cars_estimated = (population / 1000) * 650 * car_ownership
     ev_count_estimated = total_cars_estimated * (ev_percent / 100)
     
     # EVs per 1000 cars
-    evs_per_1000 = (ev_count_estimated / total_cars_estimated) * 1000
+    if total_cars_estimated > 0:
+        evs_per_1000 = (ev_count_estimated / total_cars_estimated) * 1000
+    else:
+        evs_per_1000 = ev_percent * 10  # Fallback
     
     return evs_per_1000
 
@@ -147,19 +147,12 @@ def find_nearest_substation(lat: float, lon: float) -> tuple:
     """
     Find nearest electrical substation
     
-    In production, would use:
-    - National Grid substation database
-    - OpenStreetMap power=substation tags
-    - DNO (Distribution Network Operator) data
+    In production, would use OpenStreetMap or grid database
+    For now, estimate based on urban density
     """
     
-    # Placeholder - in production, query OSM or grid database
-    # For now, estimate based on urban/rural
-    
     # Urban areas: typically 0.2-0.5km to substation
-    # Rural areas: 1-5km to substation
-    
-    # Default estimate
+    # Default conservative estimate
     distance_km = 0.3
     
     return distance_km, "estimated"
@@ -262,16 +255,15 @@ async def analyze_location_v2(req: AnalyzeLocationRequestV2):
     if traffic_result and traffic_result.success:
         traffic_intensity = traffic_result.data.get("traffic_intensity", 0.5)
     else:
-        # Fallback: estimate based on urban/rural
         traffic_intensity = 0.7  # Default medium-high traffic
     
-    # Facility attractiveness (based on OSM data)
-    facility_attractiveness = min(facilities_count / 10, 1.0)  # 10+ facilities = max score
+    # Facility attractiveness
+    facility_attractiveness = min(facilities_count / 10, 1.0)
     
     # Grid data
     distance_to_substation_km, _ = find_nearest_substation(lat, lon)
     connection_cost_gbp = estimate_grid_connection_cost(distance_to_substation_km, required_kw)
-    available_capacity_kw = required_kw * 1.5  # Assume 150% available (conservative)
+    available_capacity_kw = required_kw * 1.5
     
     # Parking
     parking_spaces = req.site_context.parking_spaces if req.site_context else 40
@@ -325,16 +317,6 @@ async def analyze_location_v2(req: AnalyzeLocationRequestV2):
         parking_facilities=parking_score
     )
     verdict = verdict_from_score(overall_score)
-    
-    print(f"""
-📈 Scores:
-   - Demand: {demand_score}/100
-   - Competition: {competition_score}/100
-   - Grid: {grid_score}/100
-   - Parking: {parking_score}/100
-   - Overall: {overall_score}/100
-   - Verdict: {verdict}
-    """)
     
     # ==================== FINANCIAL CALCULATIONS ====================
     
@@ -412,7 +394,7 @@ async def analyze_location_v2(req: AnalyzeLocationRequestV2):
     
     gap_analysis = generate_gap_analysis(fast_dc_chargers, total_chargers, req.radius_km)
     
-    # Generate competition notes
+    # Competition notes
     comp_notes = []
     if fast_dc_chargers == 0:
         comp_notes.append("No DC fast charging infrastructure in area")
@@ -442,7 +424,7 @@ async def analyze_location_v2(req: AnalyzeLocationRequestV2):
         assumptions=[
             "Distance estimated from OpenStreetMap power infrastructure",
             "Final grid connection cost must be confirmed with DNO",
-            "Actual capacity dependent on current grid loading and planned developments"
+            "Actual capacity dependent on current grid loading"
         ]
     )
     
