@@ -6,7 +6,7 @@ Simplified, business-focused EV location analysis API.
 """
 
 from fastapi import APIRouter, HTTPException
-from models_v2 import (
+from .models_v2 import (
     AnalyzeLocationRequestV2,
     AnalyzeLocationResponseV2,
     SummaryBlock,
@@ -25,7 +25,7 @@ from models_v2 import (
     DataSourcesBlock,
     DataSourceInfo
 )
-from scoring_v2 import (
+from .scoring_v2 import (
     DemandInputs,
     CompetitionInputs,
     GridInputs,
@@ -47,7 +47,7 @@ from scoring_v2 import (
     generate_next_steps,
     generate_risks
 )
-from roi_v2 import (
+from .roi_v2 import (
     ROICalculatorInputs,
     calculate_roi,
     estimate_capex,
