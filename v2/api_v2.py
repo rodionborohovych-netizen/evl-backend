@@ -21,12 +21,29 @@ from foundation.core.fetchers import (
     FetchResult
 )
 
-# Import Ukraine fetchers
-from foundation.core.fetchers_ukraine import (
-    fetch_all_data_ukraine,
-    calculate_ukraine_ev_density,
-    estimate_ukraine_grid_connection_cost
-)
+# Import Ukraine fetchers (optional)
+try:
+    from foundation.core.fetchers_ukraine import (
+        fetch_all_data_ukraine,
+        calculate_ukraine_ev_density,
+        estimate_ukraine_grid_connection_cost
+    )
+    UKRAINE_SUPPORT = True
+except ImportError:
+    # Ukraine module not available - define fallback functions
+    UKRAINE_SUPPORT = False
+    
+    async def fetch_all_data_ukraine(**kwargs):
+        """Fallback - Ukraine module not installed"""
+        return {}
+    
+    def calculate_ukraine_ev_density(dft_data, demo_data):
+        """Fallback"""
+        return 25.0
+    
+    def estimate_ukraine_grid_connection_cost(distance_km, required_kw):
+        """Fallback"""
+        return distance_km * 3000 + required_kw * 100
 
 
 class Country(str, Enum):
