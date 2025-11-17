@@ -6,7 +6,7 @@ Supports both UK and Ukraine markets with appropriate data sources.
 """
 
 from fastapi import APIRouter, HTTPException
-from typing import Dict, Any, Literal
+from typing import Dict, Any, Literal, Optional
 from enum import Enum
 
 from .models_v2 import (
