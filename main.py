@@ -25,17 +25,18 @@ from foundation.core import (
     init_database
 )
 
-# V2 Business-Focused API
+# V2 Business-Focused API - with safe import
 try:
     from v2.api_v2 import router_v2
     V2_AVAILABLE = True
-except ImportError:
-    logger.warning("V2 API not available - v2/ folder not found")
+    logger.info("✅ V2 API router imported successfully")
+except ImportError as e:
+    logger.warning(f"⚠️  V2 API not available: {e}")
+    logger.warning("Server will start but /api/v2 endpoints will not be available")
     V2_AVAILABLE = False
-
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+except Exception as e:
+    logger.error(f"❌ Error importing V2 API: {e}")
+    V2_AVAILABLE = False
 
 app = FastAPI(title="EVL v10.1 + v2.0 - EV Location Analyzer")
 
@@ -53,10 +54,14 @@ app.add_middleware(
 
 # Include V2 Router (Business-Focused API)
 if V2_AVAILABLE:
-    app.include_router(router_v2)
-    logger.info("✅ V2 business-focused API enabled at /api/v2/*")
+    try:
+        app.include_router(router_v2)
+        logger.info("✅ V2 business-focused API enabled at /api/v2/*")
+    except Exception as e:
+        logger.error(f"❌ Error including V2 router: {e}")
+        V2_AVAILABLE = False
 else:
-    logger.warning("⚠️ V2 API not available - deploy v2/ folder to enable")
+    logger.warning("⚠️ V2 API not available - deploy v2/ folder to enable
 
 # ==================== CONFIGURATION ====================
 
