@@ -26,12 +26,13 @@ from foundation.core import (
 )
 
 # V2 Business-Focused API - with safe import
+# V2 Business-Focused API - with safe import
 try:
     from v2.api_v2 import router_v2
     V2_AVAILABLE = True
-   logger.info("✅ V2 API router imported successfully")
+    logger.info("✅ V2 API router imported successfully")
 except ImportError as e:
-    logger.warning(f"⚠️  V2 API not available: {e}") 
+    logger.warning(f"⚠️  V2 API not available: {e}")
     logger.warning("Server will start but /api/v2 endpoints will not be available")
     V2_AVAILABLE = False
 except Exception as e:
