@@ -18,6 +18,12 @@ import xml.etree.ElementTree as ET
 import csv
 import io
 
+# ============================================================================
+# CRITICAL: Setup logger FIRST, before foundation imports
+# ============================================================================
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Foundation Package for Data Quality Tracking
 from foundation.core import (
     track_fetch,
@@ -25,7 +31,6 @@ from foundation.core import (
     init_database
 )
 
-# V2 Business-Focused API - with safe import
 # V2 Business-Focused API - with safe import
 try:
     from v2.api_v2 import router_v2
@@ -62,7 +67,7 @@ if V2_AVAILABLE:
         logger.error(f"❌ Error including V2 router: {e}")
         V2_AVAILABLE = False
 else:
-logger.warning("⚠️ V2 API not available - deploy v2/ folder to enable")
+    logger.warning("⚠️ V2 API not available - deploy v2/ folder to enable")
 
 # ==================== CONFIGURATION ====================
 
