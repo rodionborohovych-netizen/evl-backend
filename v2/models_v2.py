@@ -1,3 +1,8 @@
+from .enhancements_v22 import (
+    CompetitiveGapsAnalysis,
+    ConfidenceAssessment,
+    EnhancedOpportunities
+)
 """
 EVL v2.0 - Simplified Business-Focused Models
 ==============================================
@@ -239,3 +244,37 @@ class ScoreInterpretation(BaseModel):
     category: Literal["EXCELLENT", "GOOD", "MODERATE", "WEAK", "VERY_WEAK"]
     color: Literal["green", "lime", "yellow", "orange", "red"]
     description: str
+class AnalyzeLocationResponseV2(BaseModel):
+    """
+    V2.2 API Response - Enhanced with gap analysis and confidence scoring
+    """
+    
+    # ========== EXISTING FIELDS (keep all of these) ==========
+    summary: SummaryBlock
+    location: dict
+    scores: ScoresBlock
+    demand_block: DemandBlock
+    competition_block: CompetitionBlock
+    grid_block: GridBlock
+    financials: FinancialsBlock
+    recommended_configuration: RecommendedConfiguration
+    next_steps: List[str]
+    risks: List[str]
+    data_sources: Optional[DataSourcesBlock] = None
+    
+    # ========== NEW v2.2 FIELDS (add these) ==========
+    competitive_gaps: CompetitiveGapsAnalysis = Field(
+        ..., 
+        description="Detailed competitive gap analysis by power level"
+    )
+    
+    confidence_assessment: ConfidenceAssessment = Field(
+        ..., 
+        description="Confidence score and factors for this analysis"
+    )
+    
+    enhanced_opportunities: EnhancedOpportunities = Field(
+        ..., 
+        description="Prioritized opportunities with impact assessment"
+    )
+    
