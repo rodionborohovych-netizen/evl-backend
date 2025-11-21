@@ -29,9 +29,9 @@ from foundation.core import (
 try:
     from v2.api_v2 import router_v2
     V2_AVAILABLE = True
-    logger.info("✅ V2 API router imported successfully")
+   logger.info("✅ V2 API router imported successfully")
 except ImportError as e:
-    logger.warning(f"⚠️  V2 API not available: {e}")
+    logger.warning(f"⚠️  V2 API not available: {e}") 
     logger.warning("Server will start but /api/v2 endpoints will not be available")
     V2_AVAILABLE = False
 except Exception as e:
@@ -61,7 +61,7 @@ if V2_AVAILABLE:
         logger.error(f"❌ Error including V2 router: {e}")
         V2_AVAILABLE = False
 else:
-    logger.warning("⚠️ V2 API not available - deploy v2/ folder to enable
+logger.warning("⚠️ V2 API not available - deploy v2/ folder to enable")
 
 # ==================== CONFIGURATION ====================
 
