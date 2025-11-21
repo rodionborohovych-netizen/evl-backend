@@ -1,500 +1,765 @@
 """
-EVL v2.2 - Enhanced Features Extension
-=======================================
+EVL v2.2 Enhancements Module
+============================
 
-Adds v11-style features to existing v2 API:
-- Competitive gap analysis (power level breakdown)
-- Confidence scoring (meta-score on data quality)
-- Location comparison endpoint
-- Opportunity highlighting
+This module provides three major enhancements to the EVL system:
+1. Competitive Gap Analysis - Identifies power level gaps and Blue Ocean opportunities
+2. Confidence Assessment - Meta-evaluation of data quality and recommendation reliability
+3. Enhanced Opportunities - Prioritized, actionable opportunities with risk assessments
 
-Works with existing v2 models and doesn't break backward compatibility.
+Author: EVL Team
+Version: 2.2.0
+Date: November 2025
 """
 
-from typing import List, Dict, Any, Literal, Optional
-from pydantic import BaseModel, Field
+from typing import Dict, Any, List, Optional
+from dataclasses import dataclass
+from enum import Enum
 
 
-# ==================== NEW MODELS FOR v2.2 ====================
-
-class PowerLevelGap(BaseModel):
-    """Gap analysis for a specific power category"""
-    category: Literal["AC_Slow", "AC_Fast", "DC_Rapid", "DC_Ultra"] = Field(
-        ..., description="Power category"
-    )
-    power_range: str = Field(..., description="Power range (e.g., '0-7 kW')")
-    count: int = Field(..., description="Number of chargers in this category")
-    percentage: float = Field(..., description="% of total chargers")
-    market_status: Literal["Blue Ocean", "Opportunity", "Competitive", "Saturated"] = Field(
-        ..., description="Market saturation level"
-    )
-    recommendation: str = Field(..., description="Actionable insight")
+class PowerLevel(str, Enum):
+    """Standard EV charger power levels"""
+    POWER_7KW = "7kW"
+    POWER_22KW = "22kW"
+    POWER_50KW = "50kW"
+    POWER_150KW = "150kW+"
 
 
-class CompetitiveGapsAnalysis(BaseModel):
-    """Detailed competitive gap analysis"""
-    power_gaps: List[PowerLevelGap] = Field(..., description="Breakdown by power level")
-    best_opportunity: str = Field(..., description="Top opportunity identified")
-    market_positioning: str = Field(..., description="Overall market positioning advice")
+class OpportunityPriority(str, Enum):
+    """Priority levels for opportunities"""
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
 
 
-class ConfidenceFactors(BaseModel):
-    """Factors contributing to confidence score"""
-    data_completeness: int = Field(..., description="Score 0-100 for data availability")
-    data_quality: int = Field(..., description="Score 0-100 for data quality")
-    source_reliability: int = Field(..., description="Score 0-100 for source health")
-    market_clarity: int = Field(..., description="Score 0-100 for market understanding")
+class RiskLevel(str, Enum):
+    """Risk assessment levels"""
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
 
 
-class ConfidenceAssessment(BaseModel):
-    """Overall confidence in recommendations"""
-    level: Literal["Very High", "High", "Medium", "Low"] = Field(
-        ..., description="Confidence level"
-    )
-    score: int = Field(..., description="Overall confidence 0-100")
-    factors: ConfidenceFactors = Field(..., description="Contributing factors")
-    reasoning: List[str] = Field(..., description="Why this confidence level")
-    caveats: List[str] = Field(..., description="Important caveats to consider")
+@dataclass
+class CompetitivePowerBreakdown:
+    """Breakdown of existing chargers by power level"""
+    power_7kw: int
+    power_22kw: int
+    power_50kw: int
+    power_150kw: int
+    total_chargers: int
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "power_7kw": self.power_7kw,
+            "power_22kw": self.power_22kw,
+            "power_50kw": self.power_50kw,
+            "power_150kw": self.power_150kw,
+            "total_chargers": self.total_chargers
+        }
 
 
-class OpportunityHighlight(BaseModel):
-    """Individual opportunity highlight"""
-    type: Literal["market_gap", "low_competition", "strategic_location", "partnership", "other"]
-    priority: Literal["critical", "high", "medium", "low"]
-    title: str = Field(..., description="Short title")
-    description: str = Field(..., description="Detailed explanation")
-    potential_impact: str = Field(..., description="Expected impact if pursued")
+@dataclass
+class PowerLevelGap:
+    """Represents a gap in charger power levels"""
+    power_level: str
+    current_count: int
+    market_average: int
+    gap_size: int
+    gap_percentage: float
+    opportunity_score: float  # 0-10
+    reasoning: str
+    is_blue_ocean: bool
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "power_level": self.power_level,
+            "current_count": self.current_count,
+            "market_average": self.market_average,
+            "gap_size": self.gap_size,
+            "gap_percentage": round(self.gap_percentage, 2),
+            "opportunity_score": round(self.opportunity_score, 2),
+            "reasoning": self.reasoning,
+            "is_blue_ocean": self.is_blue_ocean
+        }
 
 
-class EnhancedOpportunities(BaseModel):
-    """Enhanced opportunity analysis"""
-    highlights: List[OpportunityHighlight] = Field(..., description="Top opportunities")
-    total_opportunities: int = Field(..., description="Total opportunities identified")
-    critical_count: int = Field(..., description="Number of critical opportunities")
+@dataclass
+class ConfidenceAssessment:
+    """Comprehensive confidence assessment"""
+    overall_confidence: float  # 0-1
+    data_quality_score: float  # 0-1
+    sample_size_score: float  # 0-1
+    source_reliability_score: float  # 0-1
+    consistency_score: float  # 0-1
+    reasoning: str
+    caveats: List[str]
+    strengths: List[str]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "overall_confidence": round(self.overall_confidence, 2),
+            "data_quality_score": round(self.data_quality_score, 2),
+            "sample_size_score": round(self.sample_size_score, 2),
+            "source_reliability_score": round(self.source_reliability_score, 2),
+            "consistency_score": round(self.consistency_score, 2),
+            "reasoning": self.reasoning,
+            "caveats": self.caveats,
+            "strengths": self.strengths
+        }
 
 
-# ==================== ENHANCEMENT FUNCTIONS ====================
+@dataclass
+class EnhancedOpportunity:
+    """Enhanced opportunity with detailed actionability"""
+    title: str
+    description: str
+    priority: str
+    impact_score: float  # 0-10
+    effort_score: float  # 0-10, higher = more effort
+    roi_multiplier: float
+    timeframe: str
+    risk_level: str
+    risk_factors: List[str]
+    mitigation_strategies: List[str]
+    success_metrics: List[str]
+    next_steps: List[str]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "title": self.title,
+            "description": self.description,
+            "priority": self.priority,
+            "impact_score": round(self.impact_score, 2),
+            "effort_score": round(self.effort_score, 2),
+            "roi_multiplier": round(self.roi_multiplier, 2),
+            "timeframe": self.timeframe,
+            "risk_level": self.risk_level,
+            "risk_factors": self.risk_factors,
+            "mitigation_strategies": self.mitigation_strategies,
+            "success_metrics": self.success_metrics,
+            "next_steps": self.next_steps
+        }
+
+
+class CompetitiveGapAnalyzer:
+    """Analyzes competitive gaps in charger power levels"""
+    
+    def __init__(self):
+        # Market averages for different location types (chargers per 5km radius)
+        self.market_averages = {
+            "urban_high_density": {
+                "7kW": 12,
+                "22kW": 8,
+                "50kW": 5,
+                "150kW+": 3
+            },
+            "urban_medium_density": {
+                "7kW": 8,
+                "22kW": 5,
+                "50kW": 3,
+                "150kW+": 2
+            },
+            "suburban": {
+                "7kW": 5,
+                "22kW": 3,
+                "50kW": 2,
+                "150kW+": 1
+            },
+            "rural": {
+                "7kW": 2,
+                "22kW": 1,
+                "50kW": 1,
+                "150kW+": 0
+            }
+        }
+    
+    def analyze_gaps(
+        self,
+        power_breakdown: Dict[str, int],
+        location_type: str = "urban_medium_density",
+        ev_density: float = 0.0
+    ) -> Dict[str, Any]:
+        """
+        Analyze gaps in charger power levels
+        
+        Args:
+            power_breakdown: Dict with keys "7kW", "22kW", "50kW", "150kW+"
+            location_type: Type of location for market comparison
+            ev_density: EV adoption rate (0-1)
+        
+        Returns:
+            Dict with gaps, blue ocean opportunities, and recommendations
+        """
+        # Get market averages for this location type
+        averages = self.market_averages.get(
+            location_type,
+            self.market_averages["urban_medium_density"]
+        )
+        
+        gaps = []
+        blue_ocean_opportunities = []
+        
+        # Analyze each power level
+        for power_level in ["7kW", "22kW", "50kW", "150kW+"]:
+            current = power_breakdown.get(power_level, 0)
+            market_avg = averages[power_level]
+            
+            # Calculate gap
+            gap_size = market_avg - current
+            gap_percentage = (gap_size / market_avg * 100) if market_avg > 0 else 0
+            
+            # Calculate opportunity score (0-10)
+            # Higher score = bigger opportunity
+            if gap_size <= 0:
+                opportunity_score = 0
+                reasoning = f"Market saturated at {power_level}. {current} chargers vs {market_avg} average."
+            else:
+                # Score based on gap size and EV density
+                base_score = min(10, (gap_size / market_avg) * 10)
+                ev_multiplier = 1 + (ev_density * 0.5)  # Up to 1.5x multiplier
+                opportunity_score = min(10, base_score * ev_multiplier)
+                
+                reasoning = f"Gap of {gap_size} chargers at {power_level} vs market average. "
+                reasoning += f"High demand potential with {ev_density*100:.1f}% EV adoption."
+            
+            # Determine if Blue Ocean (gap > 50% and opportunity score > 7)
+            is_blue_ocean = gap_percentage > 50 and opportunity_score > 7
+            
+            gap = PowerLevelGap(
+                power_level=power_level,
+                current_count=current,
+                market_average=market_avg,
+                gap_size=gap_size,
+                gap_percentage=gap_percentage,
+                opportunity_score=opportunity_score,
+                reasoning=reasoning,
+                is_blue_ocean=is_blue_ocean
+            )
+            
+            gaps.append(gap.to_dict())
+            
+            if is_blue_ocean:
+                blue_ocean_opportunities.append({
+                    "power_level": power_level,
+                    "opportunity_score": round(opportunity_score, 2),
+                    "description": f"Blue Ocean: {power_level} chargers are severely underserved. "
+                                 f"Only {current} vs market average of {market_avg}. "
+                                 f"First-mover advantage available."
+                })
+        
+        # Generate summary
+        total_gap = sum(g["gap_size"] for g in gaps if g["gap_size"] > 0)
+        avg_opportunity = sum(g["opportunity_score"] for g in gaps) / len(gaps) if gaps else 0
+        
+        return {
+            "power_breakdown": power_breakdown,
+            "gaps": gaps,
+            "blue_ocean_opportunities": blue_ocean_opportunities,
+            "summary": {
+                "total_gap_chargers": total_gap,
+                "average_opportunity_score": round(avg_opportunity, 2),
+                "blue_ocean_count": len(blue_ocean_opportunities),
+                "location_type": location_type
+            }
+        }
+
+
+class ConfidenceAssessor:
+    """Assesses confidence in recommendations and data quality"""
+    
+    def assess_confidence(
+        self,
+        data_sources: Dict[str, Any],
+        sample_sizes: Dict[str, int],
+        analysis_results: Dict[str, Any]
+    ) -> ConfidenceAssessment:
+        """
+        Assess overall confidence in the analysis
+        
+        Args:
+            data_sources: Dict of data source qualities
+            sample_sizes: Dict of sample sizes for each data point
+            analysis_results: The complete analysis results
+        
+        Returns:
+            ConfidenceAssessment object
+        """
+        # Calculate component scores
+        data_quality_score = self._assess_data_quality(data_sources)
+        sample_size_score = self._assess_sample_sizes(sample_sizes)
+        source_reliability_score = self._assess_source_reliability(data_sources)
+        consistency_score = self._assess_consistency(analysis_results)
+        
+        # Calculate overall confidence (weighted average)
+        overall_confidence = (
+            data_quality_score * 0.3 +
+            sample_size_score * 0.2 +
+            source_reliability_score * 0.3 +
+            consistency_score * 0.2
+        )
+        
+        # Generate reasoning
+        reasoning = self._generate_reasoning(
+            overall_confidence,
+            data_quality_score,
+            sample_size_score,
+            source_reliability_score,
+            consistency_score
+        )
+        
+        # Identify caveats and strengths
+        caveats = self._identify_caveats(
+            data_quality_score,
+            sample_size_score,
+            source_reliability_score,
+            consistency_score
+        )
+        
+        strengths = self._identify_strengths(
+            data_quality_score,
+            sample_size_score,
+            source_reliability_score,
+            consistency_score
+        )
+        
+        return ConfidenceAssessment(
+            overall_confidence=overall_confidence,
+            data_quality_score=data_quality_score,
+            sample_size_score=sample_size_score,
+            source_reliability_score=source_reliability_score,
+            consistency_score=consistency_score,
+            reasoning=reasoning,
+            caveats=caveats,
+            strengths=strengths
+        )
+    
+    def _assess_data_quality(self, data_sources: Dict[str, Any]) -> float:
+        """Assess quality of data sources"""
+        if not data_sources:
+            return 0.3
+        
+        quality_scores = []
+        for source, quality in data_sources.items():
+            if isinstance(quality, dict) and "quality_score" in quality:
+                quality_scores.append(quality["quality_score"])
+            elif isinstance(quality, (int, float)):
+                quality_scores.append(quality)
+        
+        return sum(quality_scores) / len(quality_scores) if quality_scores else 0.5
+    
+    def _assess_sample_sizes(self, sample_sizes: Dict[str, int]) -> float:
+        """Assess adequacy of sample sizes"""
+        if not sample_sizes:
+            return 0.4
+        
+        # Thresholds for different data types
+        thresholds = {
+            "chargers": 10,
+            "traffic": 100,
+            "ev_registrations": 50,
+            "facilities": 5
+        }
+        
+        scores = []
+        for data_type, size in sample_sizes.items():
+            threshold = thresholds.get(data_type, 20)
+            score = min(1.0, size / threshold)
+            scores.append(score)
+        
+        return sum(scores) / len(scores) if scores else 0.5
+    
+    def _assess_source_reliability(self, data_sources: Dict[str, Any]) -> float:
+        """Assess reliability of data sources"""
+        # Known reliable sources
+        reliable_sources = {
+            "OpenChargeMap": 0.85,
+            "OpenStreetMap": 0.80,
+            "ENTSO-E": 0.95,
+            "National Grid": 0.95,
+            "DfT": 0.90,
+            "ONS": 0.90,
+            "Google Places": 0.75
+        }
+        
+        if not data_sources:
+            return 0.7
+        
+        scores = []
+        for source in data_sources.keys():
+            score = reliable_sources.get(source, 0.6)
+            scores.append(score)
+        
+        return sum(scores) / len(scores) if scores else 0.7
+    
+    def _assess_consistency(self, analysis_results: Dict[str, Any]) -> float:
+        """Assess internal consistency of results"""
+        # Check if scores and recommendations align
+        try:
+            overall_score = analysis_results.get("scores", {}).get("overall", 50)
+            verdict = analysis_results.get("summary", {}).get("verdict", "neutral")
+            
+            # Check alignment
+            if overall_score >= 70 and verdict in ["excellent", "good"]:
+                consistency = 0.9
+            elif overall_score >= 50 and verdict in ["good", "moderate"]:
+                consistency = 0.85
+            elif overall_score < 50 and verdict in ["poor", "risky"]:
+                consistency = 0.9
+            else:
+                consistency = 0.6
+            
+            return consistency
+        except:
+            return 0.7
+    
+    def _generate_reasoning(
+        self,
+        overall: float,
+        data_quality: float,
+        sample_size: float,
+        source_reliability: float,
+        consistency: float
+    ) -> str:
+        """Generate human-readable confidence reasoning"""
+        if overall >= 0.8:
+            base = "High confidence in recommendations. "
+        elif overall >= 0.6:
+            base = "Moderate confidence in recommendations. "
+        else:
+            base = "Limited confidence in recommendations. "
+        
+        factors = []
+        if data_quality >= 0.8:
+            factors.append("strong data quality")
+        elif data_quality < 0.5:
+            factors.append("data quality concerns")
+        
+        if sample_size >= 0.7:
+            factors.append("sufficient sample sizes")
+        elif sample_size < 0.5:
+            factors.append("limited sample sizes")
+        
+        if source_reliability >= 0.8:
+            factors.append("highly reliable sources")
+        elif source_reliability < 0.6:
+            factors.append("mixed source reliability")
+        
+        if factors:
+            base += "Based on " + ", ".join(factors) + "."
+        
+        return base
+    
+    def _identify_caveats(
+        self,
+        data_quality: float,
+        sample_size: float,
+        source_reliability: float,
+        consistency: float
+    ) -> List[str]:
+        """Identify caveats in the analysis"""
+        caveats = []
+        
+        if data_quality < 0.6:
+            caveats.append("Data quality is below optimal levels")
+        
+        if sample_size < 0.5:
+            caveats.append("Sample sizes are limited - results may not be representative")
+        
+        if source_reliability < 0.7:
+            caveats.append("Some data sources have uncertain reliability")
+        
+        if consistency < 0.7:
+            caveats.append("Internal inconsistencies detected in analysis")
+        
+        if not caveats:
+            caveats.append("No significant caveats identified")
+        
+        return caveats
+    
+    def _identify_strengths(
+        self,
+        data_quality: float,
+        sample_size: float,
+        source_reliability: float,
+        consistency: float
+    ) -> List[str]:
+        """Identify strengths in the analysis"""
+        strengths = []
+        
+        if data_quality >= 0.8:
+            strengths.append("High-quality data from authoritative sources")
+        
+        if sample_size >= 0.7:
+            strengths.append("Robust sample sizes for statistical confidence")
+        
+        if source_reliability >= 0.8:
+            strengths.append("Data from highly reliable government and industry sources")
+        
+        if consistency >= 0.8:
+            strengths.append("Internally consistent analysis across all metrics")
+        
+        if not strengths:
+            strengths.append("Analysis completed with available data")
+        
+        return strengths
+
+
+class OpportunityEnhancer:
+    """Enhances basic opportunities with risk, ROI, and actionability details"""
+    
+    def enhance_opportunities(
+        self,
+        basic_opportunities: List[str],
+        scores: Dict[str, float],
+        competitive_data: Dict[str, Any],
+        financial_data: Dict[str, Any]
+    ) -> List[EnhancedOpportunity]:
+        """
+        Enhance basic opportunity strings into detailed, actionable opportunities
+        
+        Args:
+            basic_opportunities: List of opportunity strings
+            scores: Analysis scores
+            competitive_data: Competitive analysis data
+            financial_data: Financial projections
+        
+        Returns:
+            List of EnhancedOpportunity objects
+        """
+        enhanced = []
+        
+        for opp_text in basic_opportunities:
+            # Parse opportunity type
+            opp_lower = opp_text.lower()
+            
+            if "blue ocean" in opp_lower or "underserved" in opp_lower:
+                enhanced.append(self._create_blue_ocean_opportunity(
+                    opp_text, scores, competitive_data, financial_data
+                ))
+            elif "demand" in opp_lower or "high traffic" in opp_lower:
+                enhanced.append(self._create_demand_opportunity(
+                    opp_text, scores, competitive_data, financial_data
+                ))
+            elif "upgrade" in opp_lower or "modernize" in opp_lower:
+                enhanced.append(self._create_upgrade_opportunity(
+                    opp_text, scores, competitive_data, financial_data
+                ))
+            else:
+                enhanced.append(self._create_generic_opportunity(
+                    opp_text, scores, competitive_data, financial_data
+                ))
+        
+        # Sort by priority
+        priority_order = {
+            "critical": 0,
+            "high": 1,
+            "medium": 2,
+            "low": 3
+        }
+        enhanced.sort(key=lambda x: priority_order.get(x.priority, 4))
+        
+        return enhanced
+    
+    def _create_blue_ocean_opportunity(
+        self,
+        opp_text: str,
+        scores: Dict[str, float],
+        competitive_data: Dict[str, Any],
+        financial_data: Dict[str, Any]
+    ) -> EnhancedOpportunity:
+        """Create enhanced Blue Ocean opportunity"""
+        return EnhancedOpportunity(
+            title="Blue Ocean Market Entry",
+            description=opp_text,
+            priority="high",
+            impact_score=9.0,
+            effort_score=7.0,
+            roi_multiplier=2.5,
+            timeframe="12-18 months",
+            risk_level="medium",
+            risk_factors=[
+                "First-mover risk - market may be unproven",
+                "Higher initial marketing costs to establish presence",
+                "Potential for rapid competitive response"
+            ],
+            mitigation_strategies=[
+                "Start with pilot phase (2-4 chargers) to test market",
+                "Secure long-term site agreements before competitors",
+                "Build strong local partnerships early"
+            ],
+            success_metrics=[
+                "Market share >30% within 12 months",
+                "Utilization rate >40% within 6 months",
+                "Customer satisfaction >4.5/5 stars"
+            ],
+            next_steps=[
+                "Conduct detailed site survey and feasibility study",
+                "Secure grid connection approval",
+                "Develop marketing and community engagement plan",
+                "Negotiate site lease with property owner"
+            ]
+        )
+    
+    def _create_demand_opportunity(
+        self,
+        opp_text: str,
+        scores: Dict[str, float],
+        competitive_data: Dict[str, Any],
+        financial_data: Dict[str, Any]
+    ) -> EnhancedOpportunity:
+        """Create enhanced demand-driven opportunity"""
+        demand_score = scores.get("demand", 50)
+        
+        return EnhancedOpportunity(
+            title="High-Demand Location Capture",
+            description=opp_text,
+            priority="high" if demand_score >= 70 else "medium",
+            impact_score=8.5,
+            effort_score=5.0,
+            roi_multiplier=2.0,
+            timeframe="6-12 months",
+            risk_level="low",
+            risk_factors=[
+                "Competitive market may have thin margins",
+                "High utilization may require maintenance capacity"
+            ],
+            mitigation_strategies=[
+                "Deploy reliable, low-maintenance equipment",
+                "Establish 24/7 monitoring and support",
+                "Competitive pricing strategy to capture market share"
+            ],
+            success_metrics=[
+                "Utilization rate >60% within 3 months",
+                "Revenue per charger >£1,500/month",
+                "Equipment uptime >95%"
+            ],
+            next_steps=[
+                "Fast-track grid connection application",
+                "Select high-reliability charger models",
+                "Develop aggressive launch promotion",
+                "Establish maintenance partnership"
+            ]
+        )
+    
+    def _create_upgrade_opportunity(
+        self,
+        opp_text: str,
+        scores: Dict[str, float],
+        competitive_data: Dict[str, Any],
+        financial_data: Dict[str, Any]
+    ) -> EnhancedOpportunity:
+        """Create enhanced infrastructure upgrade opportunity"""
+        return EnhancedOpportunity(
+            title="Infrastructure Modernization",
+            description=opp_text,
+            priority="medium",
+            impact_score=7.0,
+            effort_score=6.0,
+            roi_multiplier=1.5,
+            timeframe="9-15 months",
+            risk_level="medium",
+            risk_factors=[
+                "Disruption during upgrade period",
+                "Higher upfront capital requirement",
+                "Technology obsolescence risk"
+            ],
+            mitigation_strategies=[
+                "Phase upgrades to minimize downtime",
+                "Choose modular, upgradeable systems",
+                "Negotiate favorable financing terms"
+            ],
+            success_metrics=[
+                "Reduced cost per kWh by 15%",
+                "Increased utilization by 25%",
+                "Customer satisfaction improvement"
+            ],
+            next_steps=[
+                "Audit existing infrastructure",
+                "Obtain upgrade quotes from suppliers",
+                "Model ROI vs. new site development",
+                "Plan phased implementation"
+            ]
+        )
+    
+    def _create_generic_opportunity(
+        self,
+        opp_text: str,
+        scores: Dict[str, float],
+        competitive_data: Dict[str, Any],
+        financial_data: Dict[str, Any]
+    ) -> EnhancedOpportunity:
+        """Create generic enhanced opportunity"""
+        overall_score = scores.get("overall", 50)
+        
+        return EnhancedOpportunity(
+            title="Market Opportunity",
+            description=opp_text,
+            priority="medium" if overall_score >= 60 else "low",
+            impact_score=6.0,
+            effort_score=5.0,
+            roi_multiplier=1.3,
+            timeframe="12-24 months",
+            risk_level="medium",
+            risk_factors=[
+                "Market conditions may change",
+                "Competitive landscape uncertain"
+            ],
+            mitigation_strategies=[
+                "Conduct thorough market research",
+                "Develop flexible deployment strategy",
+                "Monitor competitive activity"
+            ],
+            success_metrics=[
+                "Positive ROI within 36 months",
+                "Market presence established",
+                "Operational efficiency targets met"
+            ],
+            next_steps=[
+                "Detailed feasibility analysis",
+                "Stakeholder engagement",
+                "Financial modeling",
+                "Risk assessment"
+            ]
+        )
+
+
+# Convenience functions for easy integration
 
 def analyze_competitive_gaps(
-    chargers_data: List[Dict],
-    total_chargers: int,
-    fast_dc_count: int
-) -> CompetitiveGapsAnalysis:
-    """
-    Analyze competitive gaps by power level
-    
-    Categories:
-    - AC_Slow: 0-7 kW
-    - AC_Fast: 7-22 kW
-    - DC_Rapid: 50-150 kW
-    - DC_Ultra: 150+ kW
-    """
-    
-    # Count by category
-    categories = {
-        "AC_Slow": {"count": 0, "range": "0-7 kW"},
-        "AC_Fast": {"count": 0, "range": "7-22 kW"},
-        "DC_Rapid": {"count": 0, "range": "50-150 kW"},
-        "DC_Ultra": {"count": 0, "range": "150+ kW"}
-    }
-    
-    # Categorize existing chargers (if detailed data available)
-    for charger in chargers_data:
-        power_kw = charger.get('power_kw', 0)
-        if power_kw < 7:
-            categories["AC_Slow"]["count"] += 1
-        elif power_kw < 22:
-            categories["AC_Fast"]["count"] += 1
-        elif power_kw < 150:
-            categories["DC_Rapid"]["count"] += 1
-        else:
-            categories["DC_Ultra"]["count"] += 1
-    
-    # Calculate market status
-    power_gaps = []
-    blue_oceans = []
-    opportunities = []
-    
-    for cat_name, cat_data in categories.items():
-        count = cat_data["count"]
-        percentage = (count / total_chargers * 100) if total_chargers > 0 else 0
-        
-        # Determine market status
-        if count == 0:
-            status = "Blue Ocean"
-            blue_oceans.append(cat_name)
-            recommendation = f"⭐⭐ First-mover advantage - no {cat_name.replace('_', ' ')} chargers in area"
-        elif count <= 2:
-            status = "Opportunity"
-            opportunities.append(cat_name)
-            recommendation = f"⭐ Good opportunity - only {count} {cat_name.replace('_', ' ')} chargers"
-        elif count <= 5:
-            status = "Competitive"
-            recommendation = f"Viable but competitive - {count} existing {cat_name.replace('_', ' ')} chargers"
-        else:
-            status = "Saturated"
-            recommendation = f"⚠️ High competition - {count} {cat_name.replace('_', ' ')} chargers already present"
-        
-        power_gaps.append(PowerLevelGap(
-            category=cat_name,
-            power_range=cat_data["range"],
-            count=count,
-            percentage=round(percentage, 1),
-            market_status=status,
-            recommendation=recommendation
-        ))
-    
-    # Determine best opportunity
-    if blue_oceans:
-        best_opportunity = f"Blue Ocean in {', '.join(blue_oceans)} - strong first-mover advantage"
-    elif opportunities:
-        best_opportunity = f"Opportunity in {', '.join(opportunities)} - limited competition"
-    else:
-        best_opportunity = "Saturated market - differentiation through service quality recommended"
-    
-    # Market positioning advice
-    if blue_oceans:
-        positioning = "Focus on blue ocean categories to establish market presence without direct competition"
-    elif opportunities:
-        positioning = "Target opportunity categories with strategic pricing and superior service"
-    else:
-        positioning = "Highly competitive market - differentiate through location, reliability, and customer service"
-    
-    return CompetitiveGapsAnalysis(
-        power_gaps=power_gaps,
-        best_opportunity=best_opportunity,
-        market_positioning=positioning
-    )
+    power_breakdown: Dict[str, int],
+    location_type: str = "urban_medium_density",
+    ev_density: float = 0.0
+) -> Dict[str, Any]:
+    """Convenience function for gap analysis"""
+    analyzer = CompetitiveGapAnalyzer()
+    return analyzer.analyze_gaps(power_breakdown, location_type, ev_density)
 
 
 def assess_confidence(
     data_sources: Dict[str, Any],
-    scores: Dict[str, int],
-    total_chargers: int,
-    has_grid_data: bool
-) -> ConfidenceAssessment:
-    """
-    Assess confidence in recommendations based on data quality
-    
-    Factors:
-    1. Data completeness (25 points) - how many sources succeeded
-    2. Data quality (35 points) - quality scores from sources
-    3. Source reliability (20 points) - response times and consistency
-    4. Market clarity (20 points) - how clear the competitive landscape is
-    """
-    
-    # 1. Data completeness
-    sources_used = data_sources.get('sources_used', 0)
-    sources_total = data_sources.get('sources_total', 1)
-    completeness_score = int((sources_used / sources_total) * 25)
-    
-    # 2. Data quality
-    quality_percent = data_sources.get('quality_score', 0)
-    quality_score = int((quality_percent / 100) * 35)
-    
-    # 3. Source reliability (based on response times and errors)
-    sources = data_sources.get('sources', [])
-    ok_sources = sum(1 for s in sources if s.get('status') == 'ok')
-    reliability_score = int((ok_sources / len(sources) * 20)) if sources else 10
-    
-    # 4. Market clarity
-    # More chargers = better understanding of competition
-    if total_chargers >= 10:
-        market_clarity_score = 20
-    elif total_chargers >= 5:
-        market_clarity_score = 15
-    elif total_chargers >= 1:
-        market_clarity_score = 10
-    else:
-        market_clarity_score = 5
-    
-    # Grid data adds confidence
-    if has_grid_data:
-        market_clarity_score = min(20, market_clarity_score + 5)
-    
-    # Total confidence score
-    total_score = (
-        completeness_score +
-        quality_score +
-        reliability_score +
-        market_clarity_score
-    )
-    
-    # Determine level
-    if total_score >= 80:
-        level = "Very High"
-    elif total_score >= 65:
-        level = "High"
-    elif total_score >= 45:
-        level = "Medium"
-    else:
-        level = "Low"
-    
-    # Generate reasoning
-    reasoning = []
-    if completeness_score >= 20:
-        reasoning.append(f"Excellent data completeness ({sources_used}/{sources_total} sources)")
-    elif completeness_score >= 15:
-        reasoning.append(f"Good data coverage ({sources_used}/{sources_total} sources)")
-    else:
-        reasoning.append(f"⚠️ Limited data coverage ({sources_used}/{sources_total} sources)")
-    
-    if quality_score >= 28:
-        reasoning.append(f"High quality data ({quality_percent}% quality score)")
-    elif quality_score < 20:
-        reasoning.append(f"⚠️ Data quality could be better ({quality_percent}%)")
-    
-    if market_clarity_score >= 15:
-        reasoning.append(f"Clear competitive landscape ({total_chargers} chargers analyzed)")
-    else:
-        reasoning.append(f"⚠️ Limited competitive intelligence (only {total_chargers} chargers found)")
-    
-    # Generate caveats
-    caveats = []
-    if level in ["Low", "Medium"]:
-        caveats.append("Additional on-site verification recommended")
-    
-    if not has_grid_data:
-        caveats.append("Grid capacity should be confirmed with DNO/DSO")
-    
-    if total_chargers == 0:
-        caveats.append("No existing chargers found - market demand uncertain")
-    
-    caveats.append("Market conditions can change - monitor competition regularly")
-    
-    if sources_used < sources_total:
-        caveats.append(f"{sources_total - sources_used} data source(s) unavailable - some insights may be incomplete")
-    
-    return ConfidenceAssessment(
-        level=level,
-        score=total_score,
-        factors=ConfidenceFactors(
-            data_completeness=completeness_score,
-            data_quality=quality_score,
-            source_reliability=reliability_score,
-            market_clarity=market_clarity_score
-        ),
-        reasoning=reasoning,
-        caveats=caveats
-    )
-
-
-def identify_enhanced_opportunities(
-    competitive_gaps: CompetitiveGapsAnalysis,
-    scores: Dict[str, int],
-    competition_block: Dict[str, Any],
-    grid_block: Dict[str, Any],
-    demand_block: Dict[str, Any]
-) -> EnhancedOpportunities:
-    """
-    Identify and prioritize opportunities
-    
-    Types:
-    - Market gaps (blue ocean categories)
-    - Low competition
-    - Strategic location (high traffic, good grid)
-    - Partnership potential (nearby facilities)
-    """
-    
-    highlights = []
-    
-    # 1. Check for blue ocean opportunities
-    blue_oceans = [g for g in competitive_gaps.power_gaps if g.market_status == "Blue Ocean"]
-    for gap in blue_oceans:
-        highlights.append(OpportunityHighlight(
-            type="market_gap",
-            priority="critical",
-            title=f"Blue Ocean: {gap.category.replace('_', ' ')}",
-            description=f"No existing {gap.category.replace('_', ' ')} chargers in area. Strong first-mover advantage.",
-            potential_impact="High - establish market presence without direct competition"
-        ))
-    
-    # 2. Low competition opportunities
-    total_stations = competition_block.get('total_stations', 0)
-    if total_stations < 5 and scores.get('demand', 0) >= 60:
-        highlights.append(OpportunityHighlight(
-            type="low_competition",
-            priority="high" if total_stations < 3 else "medium",
-            title=f"Low Competition ({total_stations} total chargers)",
-            description="Few existing chargers despite good demand indicators. Room for market entry.",
-            potential_impact="Medium-High - capture early market share"
-        ))
-    
-    # 3. Strategic location
-    if scores.get('grid_feasibility', 0) >= 70 and scores.get('demand', 0) >= 65:
-        highlights.append(OpportunityHighlight(
-            type="strategic_location",
-            priority="high",
-            title="Strategic Location",
-            description="Excellent combination of grid access and market demand.",
-            potential_impact="High - favorable conditions for rapid deployment"
-        ))
-    
-    # 4. Partnership opportunities
-    sessions_per_day = demand_block.get('estimated_sessions_per_day', {})
-    if sessions_per_day.get('central', 0) >= 10:
-        highlights.append(OpportunityHighlight(
-            type="partnership",
-            priority="medium",
-            title="Partnership Potential",
-            description=f"High projected demand ({sessions_per_day.get('central')} sessions/day) suitable for facility partnerships.",
-            potential_impact="Medium - shared investment and cross-promotion opportunities"
-        ))
-    
-    # 5. Growth market
-    ev_growth = demand_block.get('ev_growth_yoy_percent', 0)
-    if ev_growth and ev_growth >= 30:
-        highlights.append(OpportunityHighlight(
-            type="other",
-            priority="medium",
-            title="Rapid Market Growth",
-            description=f"EV growth at {ev_growth:.0f}% YoY - expanding market opportunity.",
-            potential_impact="Medium-High - early mover advantage in growing market"
-        ))
-    
-    # Count by priority
-    critical_count = sum(1 for h in highlights if h.priority == "critical")
-    
-    return EnhancedOpportunities(
-        highlights=highlights,
-        total_opportunities=len(highlights),
-        critical_count=critical_count
-    )
-
-
-# ==================== COMPARISON LOGIC ====================
-
-def compare_locations(
-    analysis1: Dict[str, Any],
-    analysis2: Dict[str, Any],
-    location1_name: str,
-    location2_name: str
+    sample_sizes: Dict[str, int],
+    analysis_results: Dict[str, Any]
 ) -> Dict[str, Any]:
-    """
-    Compare two location analyses side by side
-    
-    Returns comparison with winner and detailed breakdown
-    """
-    
-    # Extract key metrics
-    score1 = analysis1['scores']['overall']
-    score2 = analysis2['scores']['overall']
-    
-    confidence1 = analysis1.get('confidence_assessment', {}).get('score', 50)
-    confidence2 = analysis2.get('confidence_assessment', {}).get('score', 50)
-    
-    competition1 = analysis1['competition_block']['total_stations']
-    competition2 = analysis2['competition_block']['total_stations']
-    
-    opportunities1 = analysis1.get('enhanced_opportunities', {}).get('total_opportunities', 0)
-    opportunities2 = analysis2.get('enhanced_opportunities', {}).get('total_opportunities', 0)
-    
-    roi1 = analysis1['financials']['roi'].get('payback_years')
-    roi2 = analysis2['financials']['roi'].get('payback_years')
-    
-    # Determine winner
-    # Weighted scoring: 40% overall score, 30% confidence, 20% opportunities, 10% competition
-    weighted1 = (
-        score1 * 0.4 +
-        confidence1 * 0.3 +
-        opportunities1 * 2 +  # Scale to 0-100 range
-        (100 - min(competition1 * 5, 100)) * 0.1  # Lower competition = higher score
-    )
-    
-    weighted2 = (
-        score2 * 0.4 +
-        confidence2 * 0.3 +
-        opportunities2 * 2 +
-        (100 - min(competition2 * 5, 100)) * 0.1
-    )
-    
-    winner = location1_name if weighted1 > weighted2 else location2_name
-    score_difference = abs(weighted1 - weighted2)
-    
-    # Generate reasoning
-    reasoning = []
-    
-    # Score comparison
-    if abs(score1 - score2) >= 10:
-        better_score = location1_name if score1 > score2 else location2_name
-        reasoning.append(f"{better_score}: Higher overall score ({max(score1, score2)} vs {min(score1, score2)})")
-    
-    # Confidence comparison
-    if abs(confidence1 - confidence2) >= 15:
-        better_conf = location1_name if confidence1 > confidence2 else location2_name
-        reasoning.append(f"{better_conf}: Higher confidence in data ({max(confidence1, confidence2)} vs {min(confidence1, confidence2)})")
-    
-    # Competition comparison
-    if abs(competition1 - competition2) >= 3:
-        less_comp = location1_name if competition1 < competition2 else location2_name
-        reasoning.append(f"{less_comp}: Lower competition ({min(competition1, competition2)} vs {max(competition1, competition2)} chargers)")
-    
-    # Opportunities comparison
-    if abs(opportunities1 - opportunities2) >= 2:
-        more_opp = location1_name if opportunities1 > opportunities2 else location2_name
-        reasoning.append(f"{more_opp}: More opportunities identified ({max(opportunities1, opportunities2)} vs {min(opportunities1, opportunities2)})")
-    
-    # ROI comparison (if both available)
-    if roi1 and roi2 and abs(roi1 - roi2) >= 1:
-        better_roi = location1_name if roi1 < roi2 else location2_name
-        reasoning.append(f"{better_roi}: Faster payback ({min(roi1, roi2):.1f} vs {max(roi1, roi2):.1f} years)")
-    
-    # Build comparison matrix
-    matrix = {
-        "overall_score": {
-            location1_name: score1,
-            location2_name: score2,
-            "winner": location1_name if score1 > score2 else location2_name,
-            "difference": abs(score1 - score2)
-        },
-        "confidence": {
-            location1_name: confidence1,
-            location2_name: confidence2,
-            "winner": location1_name if confidence1 > confidence2 else location2_name
-        },
-        "competition": {
-            location1_name: competition1,
-            location2_name: competition2,
-            "winner": location1_name if competition1 < competition2 else location2_name  # Lower is better
-        },
-        "opportunities": {
-            location1_name: opportunities1,
-            location2_name: opportunities2,
-            "winner": location1_name if opportunities1 > opportunities2 else location2_name
-        }
-    }
-    
-    if roi1 and roi2:
-        matrix["payback_years"] = {
-            location1_name: roi1,
-            location2_name: roi2,
-            "winner": location1_name if roi1 < roi2 else location2_name  # Lower is better
-        }
-    
-    return {
-        "winner": {
-            "location": winner,
-            "weighted_score": max(weighted1, weighted2),
-            "score_difference": score_difference,
-            "reasoning": reasoning
-        },
-        "comparison_matrix": matrix,
-        "recommendation": (
-            f"**{winner}** is the recommended location with {score_difference:.1f} point advantage. "
-            f"{'Strong' if score_difference >= 15 else 'Moderate' if score_difference >= 8 else 'Marginal'} preference."
-        )
-    }
+    """Convenience function for confidence assessment"""
+    assessor = ConfidenceAssessor()
+    assessment = assessor.assess_confidence(data_sources, sample_sizes, analysis_results)
+    return assessment.to_dict()
 
 
-__all__ = [
-    "PowerLevelGap",
-    "CompetitiveGapsAnalysis",
-    "ConfidenceFactors",
-    "ConfidenceAssessment",
-    "OpportunityHighlight",
-    "EnhancedOpportunities",
-    "analyze_competitive_gaps",
-    "assess_confidence",
-    "identify_enhanced_opportunities",
-    "compare_locations",
-]
+def enhance_opportunities(
+    basic_opportunities: List[str],
+    scores: Dict[str, float],
+    competitive_data: Dict[str, Any],
+    financial_data: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """Convenience function for opportunity enhancement"""
+    enhancer = OpportunityEnhancer()
+    enhanced = enhancer.enhance_opportunities(
+        basic_opportunities,
+        scores,
+        competitive_data,
+        financial_data
+    )
+    return [opp.to_dict() for opp in enhanced]
