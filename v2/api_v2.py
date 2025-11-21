@@ -1,369 +1,318 @@
 """
-API V2 Additions - To be added to v2/api_v2.py
+EVL v2 API - Business-Focused Location Analysis
 ================================================
 
-This file shows what code to ADD to your existing v2/api_v2.py file.
-Follow the instructions carefully to integrate v2.2 enhancements.
-
+Provides comprehensive EV charging location analysis with:
+- Demand assessment
+- Competition analysis
+- Financial projections
+- Strategic recommendations
 """
+
+from fastapi import APIRouter, HTTPException
+from typing import Dict, Any, Optional
+from pydantic import BaseModel
 
 # ============================================================================
-# STEP 1: ADD IMPORT AT THE TOP OF THE FILE
+# CRITICAL: Export router_v2 (required by main.py)
 # ============================================================================
-
-"""
-At the TOP of your v2/api_v2.py file, ADD this import:
-(Add it after your other imports, before any function definitions)
-"""
-
-from v2.enhancements_v22 import (
-    CompetitiveGapAnalyzer,
-    ConfidenceAssessor,
-    OpportunityEnhancer
-)
-
+router_v2 = APIRouter()
 
 # ============================================================================
-# STEP 2: ADD THIS CODE IN analyze_location FUNCTION
+# REQUEST/RESPONSE MODELS
 # ============================================================================
 
-"""
-In your analyze_location() function, find where you create the response object
-(usually near the end, before the return statement).
-
-ADD this code BEFORE the return statement:
-"""
-
-def analyze_location_ADDITIONS():
-    """
-    This is NOT a complete function - just showing what to ADD
-    to your existing analyze_location function.
+class LocationInput(BaseModel):
+    """Location specification"""
+    postcode: Optional[str] = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    city: Optional[str] = None
+    address: Optional[str] = None
     
-    Add this code BEFORE your final return statement.
-    """
-    
-    # === V2.2 Enhancements ===
-    # Initialize enhancers
-    gap_analyzer = CompetitiveGapAnalyzer()
-    confidence_assessor = ConfidenceAssessor()
-    opportunity_enhancer = OpportunityEnhancer()
-    
-    # 1. Competitive Gap Analysis
-    # Extract power breakdown from competition data
-    power_breakdown = {
-        "7kW": 0,
-        "22kW": 0,
-        "50kW": 0,
-        "150kW+": 0
-    }
-    
-    # Count chargers by power level from nearby_chargers
-    if nearby_chargers:
-        for charger in nearby_chargers:
-            power = charger.get("power_kw", 0)
-            if power <= 7:
-                power_breakdown["7kW"] += 1
-            elif power <= 22:
-                power_breakdown["22kW"] += 1
-            elif power <= 50:
-                power_breakdown["50kW"] += 1
-            else:
-                power_breakdown["150kW+"] += 1
-    
-    # Determine location type based on population density or facility types
-    location_type = "urban_medium_density"  # Default
-    
-    # Adjust based on available data
-    if ev_density and ev_density > 0.15:
-        location_type = "urban_high_density"
-    elif ev_density and ev_density < 0.05:
-        location_type = "suburban"
-    
-    # Run gap analysis
-    competitive_gaps = gap_analyzer.analyze_gaps(
-        power_breakdown=power_breakdown,
-        location_type=location_type,
-        ev_density=ev_density if ev_density else 0.0
-    )
-    
-    # 2. Confidence Assessment
-    # Prepare data sources info
-    data_sources = {
-        "OpenChargeMap": {"quality_score": 0.85},
-        "OpenStreetMap": {"quality_score": 0.80},
-    }
-    
-    # Add real API sources if available
-    if "entso_e" in locals() or "entso_e" in globals():
-        data_sources["ENTSO-E"] = {"quality_score": 0.95}
-    if "national_grid" in locals() or "national_grid" in globals():
-        data_sources["National Grid"] = {"quality_score": 0.95}
-    
-    # Prepare sample sizes
-    sample_sizes = {
-        "chargers": len(nearby_chargers) if nearby_chargers else 0,
-        "facilities": len(nearby_facilities) if nearby_facilities else 0,
-        "traffic": 100,  # Estimated
-    }
-    
-    # Run confidence assessment
-    confidence_assessment = confidence_assessor.assess_confidence(
-        data_sources=data_sources,
-        sample_sizes=sample_sizes,
-        analysis_results={
-            "scores": {
-                "overall": scores.get("overall", 50),
-                "demand": scores.get("demand", 50),
-                "competition": scores.get("competition", 50),
-            },
-            "summary": {
-                "verdict": summary.get("verdict", "neutral")
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "postcode": "NW6 7SD"
             }
         }
-    )
+
+class AnalysisRequest(BaseModel):
+    """Analysis request parameters"""
+    location: LocationInput
+    analysis_type: str = "full"  # full, quick, financial_only
     
-    # 3. Enhanced Opportunities
-    # Get basic opportunities from existing analysis
-    basic_opportunities = opportunities if opportunities else []
-    
-    # If you have a list of opportunity strings, use them:
-    # basic_opportunities = [
-    #     "High EV density suggests strong demand",
-    #     "Limited competition in area",
-    #     # ... etc
-    # ]
-    
-    # Enhance opportunities
-    enhanced_opportunities = opportunity_enhancer.enhance_opportunities(
-        basic_opportunities=basic_opportunities,
-        scores=scores,
-        competitive_data=competitive_gaps,
-        financial_data={
-            "capex": financials.get("capex_total", 0) if financials else 0,
-            "revenue": financials.get("revenue_annual", 0) if financials else 0,
-            "payback_years": financials.get("payback_years", 0) if financials else 0,
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "location": {"postcode": "NW6 7SD"},
+                "analysis_type": "full"
+            }
         }
+
+# ============================================================================
+# API ENDPOINTS
+# ============================================================================
+
+@router_v2.get("/")
+async def v2_root():
+    """V2 API root endpoint - shows available endpoints"""
+    return {
+        "version": "2.0",
+        "status": "active",
+        "description": "Business-focused EV charging location analysis API",
+        "endpoints": {
+            "analyze": "/api/v2/analyze-location",
+            "health": "/api/v2/health",
+            "docs": "/api/v2/docs"
+        },
+        "features": [
+            "Demand analysis",
+            "Competition assessment", 
+            "Financial projections",
+            "Strategic recommendations"
+        ]
+    }
+
+@router_v2.post("/analyze-location")
+async def analyze_location(request: AnalysisRequest) -> Dict[str, Any]:
+    """
+    Analyze a location for EV charging installation viability
+    
+    This endpoint provides comprehensive business intelligence including:
+    - Market demand assessment
+    - Competitive landscape analysis
+    - Financial projections (ROI, payback period)
+    - Strategic recommendations
+    
+    Args:
+        request: Analysis request with location and parameters
+        
+    Returns:
+        Complete location analysis with scores, insights, and recommendations
+    """
+    
+    # Extract location
+    location = request.location
+    
+    # Validate location input
+    if not any([location.postcode, location.lat and location.lon, location.city, location.address]):
+        raise HTTPException(
+            status_code=400,
+            detail="Must provide at least one location identifier: postcode, coordinates (lat/lon), city, or address"
+        )
+    
+    # ========================================================================
+    # TODO: INTEGRATE YOUR ANALYSIS LOGIC HERE
+    # ========================================================================
+    # This is a MINIMAL working version that returns mock data.
+    # Replace this section with your actual analysis code:
+    #
+    # 1. Geocode location (if needed)
+    # 2. Fetch nearby chargers (OpenChargeMap, etc.)
+    # 3. Fetch facilities and POIs (OpenStreetMap)
+    # 4. Calculate demand scores
+    # 5. Analyze competition
+    # 6. Generate financial projections
+    # 7. Create recommendations
+    #
+    # For now, returning structured mock data so the server works.
+    # ========================================================================
+    
+    # Determine location name
+    location_name = (
+        location.postcode or 
+        location.city or 
+        location.address or 
+        f"{location.lat}, {location.lon}" if location.lat and location.lon else 
+        "Unknown Location"
     )
     
-    # === END V2.2 Enhancements ===
-
-
-# ============================================================================
-# STEP 3: UPDATE YOUR RETURN STATEMENT
-# ============================================================================
-
-"""
-Find your existing return statement. It probably looks something like:
-
-return {
-    "summary": summary,
-    "scores": scores,
-    "demand": demand_details,
-    "competition": competition_details,
-    # ... other fields ...
-}
-
-UPDATE it to include the three new fields:
-"""
-
-def analyze_location_RETURN_STATEMENT():
-    """
-    Example of updated return statement.
-    Add the three new fields at the end of your existing return dict.
-    """
+    # Mock response structure (replace with real analysis)
+    response = {
+        "summary": {
+            "verdict": "moderate",
+            "overall_score": 65,
+            "location_name": location_name,
+            "recommendation": "Moderate potential for EV charging installation",
+            "confidence": "medium"
+        },
+        
+        "scores": {
+            "overall": 65,
+            "demand": 70,
+            "competition": 60,
+            "infrastructure": 65,
+            "accessibility": 75
+        },
+        
+        "demand": {
+            "ev_density": 0.08,
+            "population_density": 2500,
+            "traffic_volume": 15000,
+            "nearby_facilities": ["retail", "office"],
+            "dwell_time_estimate": 45,
+            "assessment": "Moderate EV adoption in area"
+        },
+        
+        "competition": {
+            "total_chargers_5km": 12,
+            "nearest_charger_km": 0.8,
+            "power_breakdown": {
+                "7kW": 5,
+                "22kW": 4,
+                "50kW": 2,
+                "150kW+": 1
+            },
+            "market_saturation": "medium",
+            "competitive_pressure": "moderate"
+        },
+        
+        "financials": {
+            "capex_estimate": 150000,
+            "annual_revenue_estimate": 45000,
+            "payback_years": 3.3,
+            "roi_5year": 0.35,
+            "assumptions": {
+                "utilization_rate": 0.25,
+                "avg_session_revenue": 8.50,
+                "sessions_per_day": 15
+            }
+        },
+        
+        "recommendations": [
+            "Consider 50kW DC fast chargers based on area dwell time",
+            "Partner with nearby retail locations for traffic capture",
+            "Monitor local EV adoption trends quarterly"
+        ],
+        
+        "risks": [
+            "Moderate competition within 1km radius",
+            "Grid connection costs may vary",
+            "Utilization assumptions require validation"
+        ],
+        
+        "next_steps": [
+            "Conduct detailed site survey",
+            "Engage with local grid operator",
+            "Validate traffic patterns with on-site monitoring",
+            "Review planning permissions requirements"
+        ],
+        
+        "metadata": {
+            "analysis_type": request.analysis_type,
+            "timestamp": "2025-11-21T19:00:00Z",
+            "data_sources": ["OpenChargeMap", "OpenStreetMap", "Mock Data"],
+            "version": "2.0"
+        },
+        
+        "warning": "⚠️ This is a mock response. Integrate your real analysis logic to replace this data."
+    }
     
+    return response
+
+@router_v2.get("/health")
+async def v2_health():
+    """Health check endpoint for V2 API"""
     return {
-        # === Existing fields (keep these) ===
-        "summary": summary,
+        "status": "healthy",
+        "version": "2.0",
+        "message": "V2 API is operational",
+        "endpoints_active": 3
+    }
+
+@router_v2.get("/capabilities")
+async def v2_capabilities():
+    """List V2 API capabilities and data sources"""
+    return {
+        "analysis_types": [
+            "full",
+            "quick", 
+            "financial_only"
+        ],
+        "data_sources": [
+            "OpenChargeMap - Charger locations",
+            "OpenStreetMap - POI and facilities",
+            "Traffic data - Road usage patterns",
+            "Demographics - Population and income data"
+        ],
+        "outputs": [
+            "Demand scores",
+            "Competition analysis",
+            "Financial projections",
+            "Strategic recommendations",
+            "Risk assessment",
+            "Next steps guidance"
+        ],
+        "features": {
+            "geocoding": True,
+            "real_time_data": False,
+            "historical_analysis": False,
+            "financial_modeling": True,
+            "competitive_analysis": True
+        }
+    }
+
+# ============================================================================
+# INTEGRATION NOTES
+# ============================================================================
+
+"""
+This is a MINIMAL working v2 API that will:
+1. ✅ Export router_v2 properly (fixes ImportError)
+2. ✅ Provide working endpoints
+3. ✅ Return structured mock data
+4. ⚠️  Need your real analysis logic added
+
+TO INTEGRATE YOUR ANALYSIS:
+
+1. Replace the mock response in analyze_location() with your real code
+2. Import your data fetching functions
+3. Import your scoring/calculation functions  
+4. Use the actual data instead of mock values
+
+Example integration:
+```python
+from v2.data_fetchers import fetch_chargers, fetch_facilities
+from v2.scoring import calculate_demand_score, calculate_competition_score
+
+@router_v2.post("/analyze-location")
+async def analyze_location(request: AnalysisRequest):
+    location = request.location
+    
+    # 1. Geocode
+    coords = await geocode_location(location)
+    
+    # 2. Fetch data
+    chargers = await fetch_chargers(coords.lat, coords.lon, radius=5)
+    facilities = await fetch_facilities(coords.lat, coords.lon)
+    
+    # 3. Calculate scores
+    demand_score = calculate_demand_score(facilities, population_data)
+    competition_score = calculate_competition_score(chargers)
+    
+    # 4. Return real analysis
+    return {
+        "summary": generate_summary(scores),
         "scores": scores,
         "demand": demand_details,
-        "competition": competition_details,
-        "location": location_details,
-        "recommendations": recommendations,
-        "risks": risks,
-        "next_steps": next_steps,
-        "financials": financials,
-        
-        # === NEW V2.2 fields (add these) ===
-        "competitive_gaps": competitive_gaps,
-        "confidence_assessment": confidence_assessment.to_dict(),
-        "enhanced_opportunities": [opp.to_dict() for opp in enhanced_opportunities],
+        # ... etc
     }
-
-
-# ============================================================================
-# COMPLETE INTEGRATION EXAMPLE
-# ============================================================================
-
-"""
-Here's how your analyze_location function should look after integration:
-(This is a simplified example - your actual function will be longer)
-"""
-
-from typing import Dict, Any
-from v2.enhancements_v22 import (
-    CompetitiveGapAnalyzer,
-    ConfidenceAssessor,
-    OpportunityEnhancer
-)
-
-async def analyze_location(
-    location: Dict[str, Any],
-    analysis_type: str = "full"
-) -> Dict[str, Any]:
-    """
-    Analyze a location for EV charging viability
-    
-    This is a SIMPLIFIED example showing the integration points.
-    Your actual function will have much more code.
-    """
-    
-    # ... Your existing code ...
-    # (fetch data, calculate scores, generate summary, etc.)
-    
-    # Example placeholders for existing data
-    nearby_chargers = []  # Your fetched charger data
-    nearby_facilities = []  # Your fetched facilities
-    ev_density = 0.10  # Your calculated EV density
-    scores = {"overall": 75, "demand": 80, "competition": 70}
-    summary = {"verdict": "good"}
-    opportunities = ["High demand area", "Limited competition"]
-    financials = {"capex_total": 250000, "revenue_annual": 100000}
-    
-    # =====================================================
-    # V2.2 ENHANCEMENTS START HERE
-    # =====================================================
-    
-    # Initialize enhancers
-    gap_analyzer = CompetitiveGapAnalyzer()
-    confidence_assessor = ConfidenceAssessor()
-    opportunity_enhancer = OpportunityEnhancer()
-    
-    # 1. Competitive Gap Analysis
-    power_breakdown = {"7kW": 0, "22kW": 0, "50kW": 0, "150kW+": 0}
-    
-    if nearby_chargers:
-        for charger in nearby_chargers:
-            power = charger.get("power_kw", 0)
-            if power <= 7:
-                power_breakdown["7kW"] += 1
-            elif power <= 22:
-                power_breakdown["22kW"] += 1
-            elif power <= 50:
-                power_breakdown["50kW"] += 1
-            else:
-                power_breakdown["150kW+"] += 1
-    
-    location_type = "urban_medium_density"
-    if ev_density and ev_density > 0.15:
-        location_type = "urban_high_density"
-    elif ev_density and ev_density < 0.05:
-        location_type = "suburban"
-    
-    competitive_gaps = gap_analyzer.analyze_gaps(
-        power_breakdown=power_breakdown,
-        location_type=location_type,
-        ev_density=ev_density if ev_density else 0.0
-    )
-    
-    # 2. Confidence Assessment
-    data_sources = {
-        "OpenChargeMap": {"quality_score": 0.85},
-        "OpenStreetMap": {"quality_score": 0.80},
-    }
-    
-    sample_sizes = {
-        "chargers": len(nearby_chargers) if nearby_chargers else 0,
-        "facilities": len(nearby_facilities) if nearby_facilities else 0,
-        "traffic": 100,
-    }
-    
-    confidence_assessment = confidence_assessor.assess_confidence(
-        data_sources=data_sources,
-        sample_sizes=sample_sizes,
-        analysis_results={
-            "scores": scores,
-            "summary": summary
-        }
-    )
-    
-    # 3. Enhanced Opportunities
-    enhanced_opportunities = opportunity_enhancer.enhance_opportunities(
-        basic_opportunities=opportunities,
-        scores=scores,
-        competitive_data=competitive_gaps,
-        financial_data=financials
-    )
-    
-    # =====================================================
-    # V2.2 ENHANCEMENTS END HERE
-    # =====================================================
-    
-    # Return complete response with new fields
-    return {
-        # Existing fields
-        "summary": summary,
-        "scores": scores,
-        # ... other existing fields ...
-        
-        # NEW v2.2 fields
-        "competitive_gaps": competitive_gaps,
-        "confidence_assessment": confidence_assessment.to_dict(),
-        "enhanced_opportunities": [opp.to_dict() for opp in enhanced_opportunities],
-    }
-
-
-# ============================================================================
-# TROUBLESHOOTING
-# ============================================================================
-
-"""
-Common Issues:
-
-1. ImportError: Cannot import CompetitiveGapAnalyzer
-   Solution: Make sure v2_enhancements.py is renamed to enhancements_v22.py
-   and placed in the v2/ directory
-
-2. NameError: nearby_chargers not defined
-   Solution: Use whatever variable name you use in your code for charger data
-
-3. AttributeError: has no attribute 'to_dict'
-   Solution: The confidence_assessment and opportunity objects have to_dict() methods
-   built in. Make sure you're using the correct objects.
-
-4. KeyError: 'power_kw'
-   Solution: Adjust the key names to match your charger data structure
-
-5. Response validation error
-   Solution: Make sure you've added the new model fields to LocationAnalysisResponse
-   in models_v2.py (see models_v2_additions.py)
-"""
-
-
-# ============================================================================
-# TESTING YOUR INTEGRATION
-# ============================================================================
-
-"""
-After integration, test with:
-
-```bash
-curl -X POST http://localhost:8000/api/v2/analyze-location \
-  -H "Content-Type: application/json" \
-  -d '{
-    "location": {"postcode": "NW6 7SD"},
-    "analysis_type": "full"
-  }'
 ```
 
-You should see three new fields in the response:
-- competitive_gaps
-- confidence_assessment  
-- enhanced_opportunities
-
-If you don't see them, check:
-1. Did you add the import at the top?
-2. Did you add the enhancement code before return?
-3. Did you update the return statement?
-4. Did you add the models to models_v2.py?
+For v2.2 enhancements (competitive gaps, confidence, opportunities):
+- Add after you have real data working
+- Follow api_v2_additions.py integration guide
+- Import from v2.enhancements_v22
 """
+
+# ============================================================================
+# ROUTER EXPORT CONFIRMATION
+# ============================================================================
+
+# Verify router_v2 is defined and exported
+assert router_v2 is not None, "router_v2 must be defined"
+assert isinstance(router_v2, APIRouter), "router_v2 must be an APIRouter instance"
+
+# This file exports: router_v2
+# Can be imported by main.py: from v2.api_v2 import router_v2
