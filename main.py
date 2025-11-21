@@ -61,7 +61,7 @@ app.add_middleware(
 # Include V2 Router (Business-Focused API)
 if V2_AVAILABLE:
     try:
-        app.include_router(router_v2)
+        app.include_router(router_v2, prefix="/api/v2", tags=["v2"])
         logger.info("✅ V2 business-focused API enabled at /api/v2/*")
     except Exception as e:
         logger.error(f"❌ Error including V2 router: {e}")
