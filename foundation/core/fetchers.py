@@ -29,7 +29,24 @@ class FetchResult:
 
 # ==================== 1. OPENCHARGE MAP (FIXED) ====================
 
-async def fetch_opencharge_map(
+import httpx
+import time
+from typing import Dict, Any, Optional
+from dataclasses import dataclass
+
+
+@dataclass
+class FetchResult:
+    """Standardized fetch result"""
+    success: bool
+    data: Any
+    source_id: str
+    error: Optional[str] = None
+    response_time_ms: float = 0
+    quality_score: float = 1.0
+
+
+async def fetch_opencharge_map_FIXED(
     lat: float,
     lon: float,
     radius_km: float = 5,
@@ -38,9 +55,11 @@ async def fetch_opencharge_map(
     """
     Fetch EV chargers from OpenChargeMap
     
-    GRACEFUL DEGRADATION:
-    - If API fails, returns empty list but with success=True
-    - Allows analysis to continue with competition score based on "no chargers"
+    IMPROVEMENTS:
+    - Logs all POI parsing errors (no silent failures)
+    - Tracks parse_errors statistics
+    - Returns structured error information
+    - Still gracefully degrades (returns partial results)
     """
     start = time.time()
     
@@ -56,7 +75,7 @@ async def fetch_opencharge_map(
             "maxresults": max_results,
             "compact": "true",
             "verbose": "false",
-            "key": os.getenv("OPENCHARGE_API_KEY", "")
+            "key": ""  # API key optional for OpenChargeMap
         }
         
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -66,52 +85,64 @@ async def fetch_opencharge_map(
             data = response.json()
             elapsed_ms = (time.time() - start) * 1000
             
-            --- a/foundation/core/fetchers.py
-+++ b/foundation/core/fetchers.py
-@@ -93,20 +93,36 @@ async def fetch_opencharge_map(
-             elapsed_ms = (time.time() - start) * 1000
-             
-             # Transform to our format
-             chargers = []
-+            parse_errors = []
-+            
-             for poi in data:
-                 try:
-                     chargers.append({
-                         "id": poi.get("ID"),
-                         "name": poi.get("AddressInfo", {}).get("Title", "Unknown"),
-                         "lat": poi.get("AddressInfo", {}).get("Latitude"),
-                         "lon": poi.get("AddressInfo", {}).get("Longitude"),
-                         "distance_km": poi.get("AddressInfo", {}).get("Distance"),
-                         "operator": poi.get("OperatorInfo", {}).get("Title", "Unknown"),
-                         "num_points": poi.get("NumberOfPoints", 0),
-                         "status": poi.get("StatusType", {}).get("Title", "Unknown"),
-                         "connections": [
-                             {
-                                 "type": conn.get("ConnectionType", {}).get("Title"),
-                                 "power_kw": conn.get("PowerKW", 0),
-                                 "level": conn.get("Level", {}).get("Title"),
-                                 "current": conn.get("CurrentType", {}).get("Title")
-                             }
-                             for conn in poi.get("Connections", [])
-                         ]
-                     })
-                 except Exception as e:
--                    # Skip bad records
--                    continue
-+                    # Log parsing failure with POI ID for debugging
-+                    poi_id = poi.get("ID", "unknown")
-+                    error_msg = f"Failed to parse OpenChargeMap POI {poi_id}: {str(e)}"
-+                    print(f"⚠️  {error_msg}")
-+                    parse_errors.append({"poi_id": poi_id, "error": str(e)})
-+                    continue
-+            
-+            # Log summary if there were parsing errors
-+            if parse_errors:
-+                print(f"⚠️  OpenChargeMap: {len(parse_errors)} POIs failed to parse out of {len(data)} total")
-+                print(f"   Successfully parsed: {len(chargers)} chargers")
-             
-             return FetchResult(
+            # Transform to our format
+            chargers = []
+            parse_errors = []  # NEW: Track errors
+            
+            for poi in data:
+                try:
+                    chargers.append({
+                        "id": poi.get("ID"),
+                        "name": poi.get("AddressInfo", {}).get("Title", "Unknown"),
+                        "lat": poi.get("AddressInfo", {}).get("Latitude"),
+                        "lon": poi.get("AddressInfo", {}).get("Longitude"),
+                        "distance_km": poi.get("AddressInfo", {}).get("Distance"),
+                        "operator": poi.get("OperatorInfo", {}).get("Title", "Unknown"),
+                        "num_points": poi.get("NumberOfPoints", 0),
+                        "status": poi.get("StatusType", {}).get("Title", "Unknown"),
+                        "connections": [
+                            {
+                                "type": conn.get("ConnectionType", {}).get("Title"),
+                                "power_kw": conn.get("PowerKW", 0),
+                                "level": conn.get("Level", {}).get("Title"),
+                                "current": conn.get("CurrentType", {}).get("Title")
+                            }
+                            for conn in poi.get("Connections", [])
+                        ]
+                    })
+                except Exception as e:
+                    # NEW: Log parsing failure with POI ID for debugging
+                    poi_id = poi.get("ID", "unknown")
+                    error_msg = f"Failed to parse OpenChargeMap POI {poi_id}: {str(e)}"
+                    print(f"⚠️  {error_msg}")
+                    
+                    # NEW: Collect error statistics
+                    parse_errors.append({
+                        "poi_id": poi_id,
+                        "error": str(e),
+                        "error_type": type(e).__name__
+                    })
+                    continue
+            
+            # NEW: Log summary if there were parsing errors
+            if parse_errors:
+                print(f"⚠️  OpenChargeMap: {len(parse_errors)} POIs failed to parse out of {len(data)} total")
+                print(f"   Successfully parsed: {len(chargers)} chargers")
+                print(f"   Success rate: {len(chargers)/(len(data)) * 100:.1f}%")
+            
+            # Calculate quality score based on parse success rate
+            quality_score = 1.0 if len(chargers) > 0 else 0.7
+            if parse_errors:
+                success_rate = len(chargers) / (len(chargers) + len(parse_errors))
+                quality_score = min(1.0, success_rate + 0.3)  # Partial credit
+            
+            return FetchResult(
+                success=True,
+                data=chargers,
+                source_id="openchargemap",
+                response_time_ms=elapsed_ms,
+                quality_score=quality_score
+            )
             
     except Exception as e:
         elapsed_ms = (time.time() - start) * 1000
