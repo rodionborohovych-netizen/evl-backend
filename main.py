@@ -1,6 +1,6 @@
 """
-EVL v10.1 + Day 1 Fixes - EV Location Analyzer
-Includes: C-7 (Parser logging), C-4 (FetchResult validation), C-6 (AADT validation)
+EVL v10.1 + Day 1 & C-3 Fixes - EV Location Analyzer
+Includes: C-7 (Parser logging), C-4 (FetchResult validation), C-6 (AADT validation), C-3 (Coordinate validation)
 """
 
 from fastapi import FastAPI, Query, HTTPException
@@ -43,6 +43,14 @@ MIN_VALID_AADT = 100    # Minimum plausible daily traffic
 MAX_VALID_AADT = 200000 # Maximum plausible daily traffic
 
 # ============================================================================
+# [C-3] Coordinate Validation Constants
+# ============================================================================
+MIN_LATITUDE = -90.0
+MAX_LATITUDE = 90.0
+MIN_LONGITUDE = -180.0
+MAX_LONGITUDE = 180.0
+
+# ============================================================================
 # V2 Import with Error Handling
 # ============================================================================
 try:
@@ -61,7 +69,7 @@ except Exception as e:
 # ============================================================================
 
 app = FastAPI(
-    title="EVL v10.1 + Day 1 Fixes",
+    title="EVL v10.1 + Day 1 & C-3 Fixes",
     description="EV Location Analyzer with Production-Ready Data Validation",
     version="10.1"
 )
@@ -107,6 +115,68 @@ def distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
          math.sin(dlon/2)**2)
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
     return round(R * c, 2)
+
+# ============================================================================
+# [C-3] Coordinate Validation Functions
+# ============================================================================
+
+def validate_coordinates(lat: float, lon: float, context: str = "unknown") -> tuple:
+    """
+    Validate latitude and longitude values.
+    [C-3] Returns (is_valid, error_message)
+    """
+    # Validate latitude
+    if not isinstance(lat, (int, float)):
+        error = f"Latitude must be numeric, got {type(lat).__name__}"
+        logger.warning(f"Invalid latitude in {context}: {error}")
+        return False, error
+    
+    if lat < MIN_LATITUDE or lat > MAX_LATITUDE:
+        error = f"Latitude must be between {MIN_LATITUDE} and {MAX_LATITUDE}, got {lat}"
+        logger.warning(f"Latitude out of range in {context}: {error}")
+        return False, error
+    
+    # Validate longitude
+    if not isinstance(lon, (int, float)):
+        error = f"Longitude must be numeric, got {type(lon).__name__}"
+        logger.warning(f"Invalid longitude in {context}: {error}")
+        return False, error
+    
+    if lon < MIN_LONGITUDE or lon > MAX_LONGITUDE:
+        error = f"Longitude must be between {MIN_LONGITUDE} and {MAX_LONGITUDE}, got {lon}"
+        logger.warning(f"Longitude out of range in {context}: {error}")
+        return False, error
+    
+    # Check for Null Island (common geocoding failure)
+    if round(lat, 6) == 0.0 and round(lon, 6) == 0.0:
+        error = "Invalid coordinates (0, 0) - likely geocoding failure"
+        logger.warning(f"Null Island coordinates in {context}")
+        return False, error
+    
+    return True, None
+
+
+def validate_radius(radius_km: float, context: str = "unknown") -> tuple:
+    """
+    Validate search radius.
+    [C-3] Returns (is_valid, error_message)
+    """
+    if not isinstance(radius_km, (int, float)):
+        error = f"Radius must be numeric, got {type(radius_km).__name__}"
+        logger.warning(f"Invalid radius in {context}: {error}")
+        return False, error
+    
+    if radius_km <= 0:
+        error = f"Radius must be positive, got {radius_km}"
+        logger.warning(f"Invalid radius in {context}: {error}")
+        return False, error
+    
+    if radius_km > 100:
+        error = f"Radius too large (max 100km), got {radius_km}"
+        logger.warning(f"Radius in {context}: {error}")
+        return False, error
+    
+    return True, None
 
 # ============================================================================
 # [C-6] AADT Validation Function
@@ -601,13 +671,14 @@ def calculate_comprehensive_scores(
 async def root():
     """API root endpoint"""
     return {
-        "service": "EVL v10.1 + Day 1 Fixes",
+        "service": "EVL v10.1 + Day 1 & C-3 Fixes",
         "version": "10.1",
         "status": "operational",
         "features": [
             "C-7: OpenChargeMap error logging",
             "C-4: FetchResult validation",
-            "C-6: AADT validation"
+            "C-6: AADT validation",
+            "C-3: Coordinate validation"
         ],
         "v2_api": V2_AVAILABLE,
         "endpoints": {
@@ -624,7 +695,7 @@ async def health():
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "version": "10.1",
-        "fixes_applied": ["C-7", "C-4", "C-6"]
+        "fixes_applied": ["C-7", "C-4", "C-6", "C-3"]
     }
 
 @app.post("/api/v1/analyze-location")
@@ -636,7 +707,7 @@ async def analyze_location(
 ):
     """
     Analyze location for EV charging station suitability.
-    Includes all Day 1 fixes: C-7, C-4, C-6
+    Includes all Day 1 + C-3 fixes: C-7, C-4, C-6, C-3
     """
     
     # Geocode if needed
@@ -654,8 +725,18 @@ async def analyze_location(
                 if data:
                     lat = float(data[0]["lat"])
                     lon = float(data[0]["lon"])
+                    
+                    # [C-3] VALIDATE GEOCODED COORDINATES
+                    is_valid, error = validate_coordinates(lat, lon, "geocoding result")
+                    if not is_valid:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Geocoding returned invalid coordinates: {error}"
+                        )
                 else:
                     raise HTTPException(status_code=404, detail="Location not found")
+        except HTTPException:
+            raise  # Re-raise HTTPException as-is
         except Exception as e:
             logger.error(f"Geocoding failed: {e}")
             raise HTTPException(status_code=500, detail="Geocoding failed")
@@ -663,7 +744,17 @@ async def analyze_location(
     if not (lat and lon):
         raise HTTPException(status_code=400, detail="Provide either postcode or lat/lon")
     
-    logger.info(f"Analyzing location: lat={lat}, lon={lon}, radius={radius_km}km")
+    # [C-3] VALIDATE COORDINATES
+    is_valid, error = validate_coordinates(lat, lon, "V1 user input")
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error)
+    
+    # [C-3] VALIDATE RADIUS
+    is_valid, error = validate_radius(radius_km, "V1 user input")
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error)
+    
+    logger.info(f"V1 Analyzing validated location: lat={lat}, lon={lon}, radius={radius_km}km")
     
     # Fetch all data sources
     chargers_result = await fetch_opencharge_map(lat, lon, radius_km)
@@ -697,7 +788,7 @@ async def analyze_location(
             "analyzed_at": datetime.now().isoformat(),
             "radius_km": radius_km,
             "version": "10.1",
-            "fixes_applied": ["C-7", "C-4", "C-6"]
+            "fixes_applied": ["C-7", "C-4", "C-6", "C-3"]
         }
     }
     
@@ -705,7 +796,7 @@ async def analyze_location(
 
 @app.get("/api/v1/test-validation")
 async def test_validation():
-    """Test endpoint to verify Day 1 fixes are working"""
+    """Test endpoint to verify Day 1 + C-3 fixes are working"""
     
     # Test C-6: AADT validation
     aadt_tests = {
@@ -716,8 +807,16 @@ async def test_validation():
         "too_high": validate_aadt(300000, "test_5")
     }
     
+    # Test C-3: Coordinate validation
+    coord_tests = {
+        "valid": validate_coordinates(51.5, -0.1, "test"),
+        "lat_high": validate_coordinates(999, -0.1, "test"),
+        "lon_low": validate_coordinates(51.5, -999, "test"),
+        "null_island": validate_coordinates(0.0, 0.0, "test")
+    }
+    
     return {
-        "status": "Day 1 fixes active",
+        "status": "Day 1 + C-3 fixes active",
         "tests": {
             "c6_aadt_validation": {
                 "valid_50000": {"value": aadt_tests["valid"][0], "is_valid": aadt_tests["valid"][1]},
@@ -725,6 +824,12 @@ async def test_validation():
                 "negative": {"value": aadt_tests["negative"][0], "is_valid": aadt_tests["negative"][1]},
                 "string": {"value": aadt_tests["string"][0], "is_valid": aadt_tests["string"][1]},
                 "too_high": {"value": aadt_tests["too_high"][0], "is_valid": aadt_tests["too_high"][1]}
+            },
+            "c3_coordinate_validation": {
+                "valid_london": {"is_valid": coord_tests["valid"][0], "error": coord_tests["valid"][1]},
+                "lat_999": {"is_valid": coord_tests["lat_high"][0], "error": coord_tests["lat_high"][1]},
+                "lon_minus_999": {"is_valid": coord_tests["lon_low"][0], "error": coord_tests["lon_low"][1]},
+                "null_island": {"is_valid": coord_tests["null_island"][0], "error": coord_tests["null_island"][1]}
             },
             "c4_validation_helpers": {
                 "validate_source_data": "✅ Available",
@@ -735,7 +840,7 @@ async def test_validation():
                 "quality_scoring": "✅ Enabled"
             }
         },
-        "fixes_verified": ["C-7", "C-4", "C-6"]
+        "fixes_verified": ["C-7", "C-4", "C-6", "C-3"]
     }
 
 # ============================================================================
@@ -745,11 +850,12 @@ async def test_validation():
 @app.on_event("startup")
 async def startup_event():
     logger.info("=" * 60)
-    logger.info("🚀 EVL v10.1 + Day 1 Fixes Starting")
+    logger.info("🚀 EVL v10.1 + Day 1 & C-3 Fixes Starting")
     logger.info("=" * 60)
     logger.info("✅ C-7: OpenChargeMap parser error logging enabled")
     logger.info("✅ C-4: FetchResult validation enabled")
     logger.info("✅ C-6: AADT validation enabled")
+    logger.info("✅ C-3: Coordinate validation enabled")
     logger.info(f"✅ V2 Business API: {'Enabled' if V2_AVAILABLE else 'Disabled'}")
     logger.info("=" * 60)
 
