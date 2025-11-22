@@ -1,7 +1,8 @@
 """
-EVL Data Fetchers - FIXED VERSION with Graceful Degradation
-============================================================
+EVL Data Fetchers - UPDATED VERSION with [C-7] Fix
+===================================================
 
+[C-7] APPLIED: OpenChargeMap parser now logs all failures
 This version NEVER fails - it always returns usable data.
 If API fails, returns estimated/fallback data with lower quality score.
 """
@@ -27,26 +28,9 @@ class FetchResult:
     quality_score: float = 1.0
 
 
-# ==================== 1. OPENCHARGE MAP (FIXED) ====================
+# ==================== 1. OPENCHARGE MAP (✅ [C-7] FIXED) ====================
 
-import httpx
-import time
-from typing import Dict, Any, Optional
-from dataclasses import dataclass
-
-
-@dataclass
-class FetchResult:
-    """Standardized fetch result"""
-    success: bool
-    data: Any
-    source_id: str
-    error: Optional[str] = None
-    response_time_ms: float = 0
-    quality_score: float = 1.0
-
-
-async def fetch_opencharge_map_FIXED(
+async def fetch_opencharge_map(
     lat: float,
     lon: float,
     radius_km: float = 5,
@@ -55,11 +39,11 @@ async def fetch_opencharge_map_FIXED(
     """
     Fetch EV chargers from OpenChargeMap
     
-    IMPROVEMENTS:
-    - Logs all POI parsing errors (no silent failures)
-    - Tracks parse_errors statistics
-    - Returns structured error information
-    - Still gracefully degrades (returns partial results)
+    [C-7 FIXED] IMPROVEMENTS:
+    - ✅ Logs all POI parsing errors (no silent failures)
+    - ✅ Tracks parse_errors statistics  
+    - ✅ Returns structured error information
+    - ✅ Still gracefully degrades (returns partial results)
     """
     start = time.time()
     
@@ -87,7 +71,7 @@ async def fetch_opencharge_map_FIXED(
             
             # Transform to our format
             chargers = []
-            parse_errors = []  # NEW: Track errors
+            parse_errors = []  # [C-7] ✅ Track errors - no more silent failures!
             
             for poi in data:
                 try:
@@ -111,12 +95,12 @@ async def fetch_opencharge_map_FIXED(
                         ]
                     })
                 except Exception as e:
-                    # NEW: Log parsing failure with POI ID for debugging
+                    # [C-7] ✅ Log parsing failure with POI ID for debugging
                     poi_id = poi.get("ID", "unknown")
                     error_msg = f"Failed to parse OpenChargeMap POI {poi_id}: {str(e)}"
                     print(f"⚠️  {error_msg}")
                     
-                    # NEW: Collect error statistics
+                    # [C-7] ✅ Collect error statistics
                     parse_errors.append({
                         "poi_id": poi_id,
                         "error": str(e),
@@ -124,13 +108,13 @@ async def fetch_opencharge_map_FIXED(
                     })
                     continue
             
-            # NEW: Log summary if there were parsing errors
+            # [C-7] ✅ Log summary if there were parsing errors
             if parse_errors:
                 print(f"⚠️  OpenChargeMap: {len(parse_errors)} POIs failed to parse out of {len(data)} total")
                 print(f"   Successfully parsed: {len(chargers)} chargers")
                 print(f"   Success rate: {len(chargers)/(len(data)) * 100:.1f}%")
             
-            # Calculate quality score based on parse success rate
+            # [C-7] ✅ Calculate quality score based on parse success rate
             quality_score = 1.0 if len(chargers) > 0 else 0.7
             if parse_errors:
                 success_rate = len(chargers) / (len(chargers) + len(parse_errors))
