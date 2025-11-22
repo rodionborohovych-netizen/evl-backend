@@ -1,6 +1,6 @@
 """
-EVL v10.1 + Day 1 & C-3 Fixes - EV Location Analyzer
-Includes: C-7 (Parser logging), C-4 (FetchResult validation), C-6 (AADT validation), C-3 (Coordinate validation)
+EVL v10.1 + Day 1 & C-3 & M-3 Fixes - EV Location Analyzer
+Includes: C-7 (Parser logging), C-4 (FetchResult validation), C-6 (AADT validation), C-3 (Coordinate validation), M-3 (Power validation)
 """
 
 from fastapi import FastAPI, Query, HTTPException
@@ -49,6 +49,13 @@ MIN_LATITUDE = -90.0
 MAX_LATITUDE = 90.0
 MIN_LONGITUDE = -180.0
 MAX_LONGITUDE = 180.0
+
+# ============================================================================
+# [M-3] Power Validation Constants
+# ============================================================================
+DEFAULT_POWER_KW = 7.0      # Standard AC charger power
+MIN_VALID_POWER_KW = 1.0    # Minimum valid power
+MAX_VALID_POWER_KW = 500.0  # Maximum valid power (ultra-rapid)
 
 # ============================================================================
 # V2 Import with Error Handling
@@ -231,6 +238,58 @@ def validate_aadt(aadt: Any, road_id: str = "unknown") -> tuple:
     return int(aadt), True
 
 # ============================================================================
+# [M-3] Power Validation Function
+# ============================================================================
+
+def validate_power_kw(power_kw: Any, charger_id: str = "unknown") -> tuple:
+    """
+    Validate charger power value and return (validated_value, is_valid).
+    
+    Args:
+        power_kw: The power value to validate (could be any type)
+        charger_id: Charger identifier for logging
+        
+    Returns:
+        Tuple of (validated_power, is_original_valid)
+    """
+    # Check if numeric
+    if not isinstance(power_kw, (int, float)):
+        logger.warning(
+            f"Power validation failed for charger {charger_id}: "
+            f"Non-numeric value '{power_kw}' (type: {type(power_kw).__name__}), "
+            f"using default {DEFAULT_POWER_KW}kW"
+        )
+        return DEFAULT_POWER_KW, False
+    
+    # Check if positive
+    if power_kw <= 0:
+        logger.warning(
+            f"Power validation failed for charger {charger_id}: "
+            f"Non-positive value {power_kw}kW, using default {DEFAULT_POWER_KW}kW"
+        )
+        return DEFAULT_POWER_KW, False
+    
+    # Check if within plausible range
+    if power_kw < MIN_VALID_POWER_KW:
+        logger.warning(
+            f"Power validation warning for charger {charger_id}: "
+            f"Unusually low value {power_kw}kW (< {MIN_VALID_POWER_KW}kW), "
+            f"using default {DEFAULT_POWER_KW}kW"
+        )
+        return DEFAULT_POWER_KW, False
+    
+    if power_kw > MAX_VALID_POWER_KW:
+        logger.warning(
+            f"Power validation warning for charger {charger_id}: "
+            f"Unusually high value {power_kw}kW (> {MAX_VALID_POWER_KW}kW), "
+            f"capping at {MAX_VALID_POWER_KW}kW"
+        )
+        return MAX_VALID_POWER_KW, False
+    
+    # Valid!
+    return float(power_kw), True
+
+# ============================================================================
 # [C-4] Data Validation Helper Functions
 # ============================================================================
 
@@ -321,19 +380,46 @@ async def fetch_opencharge_map(lat: float, lon: float, radius_km: float = 5.0) -
                 fetched_at=datetime.now()
             )
         
-        # [C-7] Parse with error tracking
+        # [C-7 + M-3] Parse with error tracking and power validation
         chargers = []
         parse_errors = []
+        power_valid_count = 0
+        power_invalid_count = 0
+        power_validation_details = []
         
         for poi in data:
             try:
                 address_info = poi.get("AddressInfo", {})
+                charger_id = str(poi.get("ID", "unknown"))
+                
+                # Extract raw power value
+                raw_power = 0
+                connections = poi.get("Connections", [])
+                if connections and len(connections) > 0:
+                    raw_power = connections[0].get("PowerKW", 0) or 0
+                
+                # [M-3] VALIDATE POWER
+                validated_power, is_valid = validate_power_kw(raw_power, charger_id)
+                
+                if is_valid:
+                    power_valid_count += 1
+                else:
+                    power_invalid_count += 1
+                    power_validation_details.append({
+                        "charger_id": charger_id,
+                        "charger_name": address_info.get("Title", "Unknown"),
+                        "raw_power": raw_power,
+                        "validated_power": validated_power
+                    })
+                
                 chargers.append({
                     "id": poi.get("ID"),
-                    "name": poi.get("AddressInfo", {}).get("Title", "Unknown"),
+                    "name": address_info.get("Title", "Unknown"),
                     "lat": address_info.get("Latitude"),
                     "lon": address_info.get("Longitude"),
-                    "power_kw": poi.get("Connections", [{}])[0].get("PowerKW", 0) if poi.get("Connections") else 0,
+                    "power_kw": validated_power,
+                    "power_validated": is_valid,
+                    "power_original": raw_power if is_valid else None,
                     "status": poi.get("StatusType", {}).get("Title", "Unknown"),
                     "operator": poi.get("OperatorInfo", {}).get("Title", "Unknown"),
                     "num_points": poi.get("NumberOfPoints", 1),
@@ -349,8 +435,21 @@ async def fetch_opencharge_map(lat: float, lon: float, radius_km: float = 5.0) -
         if parse_errors:
             logger.warning(f"{len(parse_errors)} POIs failed to parse")
         
-        # [C-7] Calculate quality score
-        quality_score = len(chargers) / len(data) if data else 1.0
+        # [M-3] Log power validation summary
+        if power_invalid_count > 0:
+            logger.warning(
+                f"Power validation: {power_valid_count}/{len(chargers)} valid "
+                f"({power_valid_count/len(chargers):.1%}), {power_invalid_count} invalid"
+            )
+        
+        # [C-7] Calculate parse quality score
+        parse_quality = len(chargers) / len(data) if data else 1.0
+        
+        # [M-3] Calculate power validation quality
+        power_validation_rate = power_valid_count / len(chargers) if chargers else 1.0
+        
+        # Combined quality score
+        combined_quality = (parse_quality + power_validation_rate) / 2
         
         return FetchResult(
             success=True,
@@ -362,11 +461,19 @@ async def fetch_opencharge_map(lat: float, lon: float, radius_km: float = 5.0) -
                     "parsed": len(chargers),
                     "failed": len(parse_errors),
                     "parse_errors": parse_errors[:5]  # First 5 for debugging
+                },
+                "power_validation": {
+                    "total_chargers": len(chargers),
+                    "valid_power": power_valid_count,
+                    "invalid_power": power_invalid_count,
+                    "validation_rate": power_validation_rate,
+                    "default_used": power_invalid_count > 0,
+                    "validation_details": power_validation_details[:5]  # First 5 for debugging
                 }
             },
             source_id="opencharge_map",
             fetched_at=datetime.now(),
-            quality_score=quality_score
+            quality_score=combined_quality
         )
         
     except httpx.TimeoutException:
@@ -671,14 +778,15 @@ def calculate_comprehensive_scores(
 async def root():
     """API root endpoint"""
     return {
-        "service": "EVL v10.1 + Day 1 & C-3 Fixes",
+        "service": "EVL v10.1 + Day 1 & C-3 & M-3 Fixes",
         "version": "10.1",
         "status": "operational",
         "features": [
             "C-7: OpenChargeMap error logging",
             "C-4: FetchResult validation",
             "C-6: AADT validation",
-            "C-3: Coordinate validation"
+            "C-3: Coordinate validation",
+            "M-3: Power validation"
         ],
         "v2_api": V2_AVAILABLE,
         "endpoints": {
@@ -695,7 +803,7 @@ async def health():
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "version": "10.1",
-        "fixes_applied": ["C-7", "C-4", "C-6", "C-3"]
+        "fixes_applied": ["C-7", "C-4", "C-6", "C-3", "M-3"]
     }
 
 @app.post("/api/v1/analyze-location")
@@ -707,7 +815,7 @@ async def analyze_location(
 ):
     """
     Analyze location for EV charging station suitability.
-    Includes all Day 1 + C-3 fixes: C-7, C-4, C-6, C-3
+    Includes all Day 1 + C-3 + M-3 fixes: C-7, C-4, C-6, C-3, M-3
     """
     
     # Geocode if needed
@@ -788,7 +896,7 @@ async def analyze_location(
             "analyzed_at": datetime.now().isoformat(),
             "radius_km": radius_km,
             "version": "10.1",
-            "fixes_applied": ["C-7", "C-4", "C-6", "C-3"]
+            "fixes_applied": ["C-7", "C-4", "C-6", "C-3", "M-3"]
         }
     }
     
@@ -796,7 +904,7 @@ async def analyze_location(
 
 @app.get("/api/v1/test-validation")
 async def test_validation():
-    """Test endpoint to verify Day 1 + C-3 fixes are working"""
+    """Test endpoint to verify Day 1 + C-3 + M-3 fixes are working"""
     
     # Test C-6: AADT validation
     aadt_tests = {
@@ -815,8 +923,17 @@ async def test_validation():
         "null_island": validate_coordinates(0.0, 0.0, "test")
     }
     
+    # Test M-3: Power validation
+    power_tests = {
+        "valid": validate_power_kw(50, "test_1"),
+        "zero": validate_power_kw(0, "test_2"),
+        "negative": validate_power_kw(-10, "test_3"),
+        "too_high": validate_power_kw(999, "test_4"),
+        "string": validate_power_kw("fast", "test_5")
+    }
+    
     return {
-        "status": "Day 1 + C-3 fixes active",
+        "status": "Day 1 + C-3 + M-3 fixes active",
         "tests": {
             "c6_aadt_validation": {
                 "valid_50000": {"value": aadt_tests["valid"][0], "is_valid": aadt_tests["valid"][1]},
@@ -831,6 +948,13 @@ async def test_validation():
                 "lon_minus_999": {"is_valid": coord_tests["lon_low"][0], "error": coord_tests["lon_low"][1]},
                 "null_island": {"is_valid": coord_tests["null_island"][0], "error": coord_tests["null_island"][1]}
             },
+            "m3_power_validation": {
+                "valid_50kw": {"value": power_tests["valid"][0], "is_valid": power_tests["valid"][1]},
+                "zero": {"value": power_tests["zero"][0], "is_valid": power_tests["zero"][1]},
+                "negative": {"value": power_tests["negative"][0], "is_valid": power_tests["negative"][1]},
+                "too_high_999": {"value": power_tests["too_high"][0], "is_valid": power_tests["too_high"][1]},
+                "string_fast": {"value": power_tests["string"][0], "is_valid": power_tests["string"][1]}
+            },
             "c4_validation_helpers": {
                 "validate_source_data": "✅ Available",
                 "safe_get_nested": "✅ Available"
@@ -840,7 +964,7 @@ async def test_validation():
                 "quality_scoring": "✅ Enabled"
             }
         },
-        "fixes_verified": ["C-7", "C-4", "C-6", "C-3"]
+        "fixes_verified": ["C-7", "C-4", "C-6", "C-3", "M-3"]
     }
 
 # ============================================================================
@@ -850,12 +974,13 @@ async def test_validation():
 @app.on_event("startup")
 async def startup_event():
     logger.info("=" * 60)
-    logger.info("🚀 EVL v10.1 + Day 1 & C-3 Fixes Starting")
+    logger.info("🚀 EVL v10.1 + Day 1 & C-3 & M-3 Fixes Starting")
     logger.info("=" * 60)
     logger.info("✅ C-7: OpenChargeMap parser error logging enabled")
     logger.info("✅ C-4: FetchResult validation enabled")
     logger.info("✅ C-6: AADT validation enabled")
     logger.info("✅ C-3: Coordinate validation enabled")
+    logger.info("✅ M-3: Power validation enabled")
     logger.info(f"✅ V2 Business API: {'Enabled' if V2_AVAILABLE else 'Disabled'}")
     logger.info("=" * 60)
 
