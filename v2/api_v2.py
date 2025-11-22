@@ -1,9 +1,10 @@
 """
-V2 API - Business-Focused with REAL DATA + C-3 Validation
-===========================================================
+V2 API - Business-Focused with REAL DATA + C-3 + M-3 Validation
+================================================================
 
 [C-1] Complete replacement of mock data with real analysis.
 [C-3] Coordinate validation for all inputs.
+[M-3] Power validation for all chargers.
 Uses all Day 1 fixes: C-7 (logging), C-4 (validation), C-6 (AADT validation)
 """
 
@@ -40,6 +41,14 @@ MIN_LATITUDE = -90.0
 MAX_LATITUDE = 90.0
 MIN_LONGITUDE = -180.0
 MAX_LONGITUDE = 180.0
+
+# ============================================================================
+# [M-3] Power Validation Constants
+# ============================================================================
+
+DEFAULT_POWER_KW = 7.0      # Standard AC charger power
+MIN_VALID_POWER_KW = 1.0    # Minimum valid power
+MAX_VALID_POWER_KW = 500.0  # Maximum valid power (ultra-rapid)
 
 # ============================================================================
 # Response Models
@@ -139,6 +148,58 @@ def validate_radius(radius_km: float, context: str = "unknown") -> tuple:
     return True, None
 
 # ============================================================================
+# [M-3] Power Validation Function
+# ============================================================================
+
+def validate_power_kw(power_kw: Any, charger_id: str = "unknown") -> tuple:
+    """
+    Validate charger power value and return (validated_value, is_valid).
+    
+    Args:
+        power_kw: The power value to validate (could be any type)
+        charger_id: Charger identifier for logging
+        
+    Returns:
+        Tuple of (validated_power, is_original_valid)
+    """
+    # Check if numeric
+    if not isinstance(power_kw, (int, float)):
+        logger.warning(
+            f"Power validation failed for charger {charger_id}: "
+            f"Non-numeric value '{power_kw}' (type: {type(power_kw).__name__}), "
+            f"using default {DEFAULT_POWER_KW}kW"
+        )
+        return DEFAULT_POWER_KW, False
+    
+    # Check if positive
+    if power_kw <= 0:
+        logger.warning(
+            f"Power validation failed for charger {charger_id}: "
+            f"Non-positive value {power_kw}kW, using default {DEFAULT_POWER_KW}kW"
+        )
+        return DEFAULT_POWER_KW, False
+    
+    # Check if within plausible range
+    if power_kw < MIN_VALID_POWER_KW:
+        logger.warning(
+            f"Power validation warning for charger {charger_id}: "
+            f"Unusually low value {power_kw}kW (< {MIN_VALID_POWER_KW}kW), "
+            f"using default {DEFAULT_POWER_KW}kW"
+        )
+        return DEFAULT_POWER_KW, False
+    
+    if power_kw > MAX_VALID_POWER_KW:
+        logger.warning(
+            f"Power validation warning for charger {charger_id}: "
+            f"Unusually high value {power_kw}kW (> {MAX_VALID_POWER_KW}kW), "
+            f"capping at {MAX_VALID_POWER_KW}kW"
+        )
+        return MAX_VALID_POWER_KW, False
+    
+    # Valid!
+    return float(power_kw), True
+
+# ============================================================================
 # Real Data Fetchers (using the same logic as main.py)
 # ============================================================================
 
@@ -176,9 +237,12 @@ async def fetch_real_chargers(lat: float, lon: float, radius_km: float = 5.0) ->
                 "by_power": {"fast_dc": 0, "rapid_dc": 0, "slow_ac": 0}
             }
         
-        # Parse chargers with error tracking (C-7)
+        # Parse chargers with error tracking (C-7) and power validation (M-3)
         chargers = []
         parse_errors = []
+        power_valid_count = 0
+        power_invalid_count = 0
+        power_validation_details = []
         
         # Count by power level
         fast_dc = 0  # 50+ kW
@@ -189,16 +253,31 @@ async def fetch_real_chargers(lat: float, lon: float, radius_km: float = 5.0) ->
             try:
                 address_info = poi.get("AddressInfo", {})
                 connections = poi.get("Connections", [])
+                charger_id = str(poi.get("ID", "unknown"))
                 
-                # Get power (default to 0 if not available)
-                power_kw = 0
+                # Get raw power (default to 0 if not available)
+                raw_power = 0
                 if connections and len(connections) > 0:
-                    power_kw = connections[0].get("PowerKW", 0) or 0
+                    raw_power = connections[0].get("PowerKW", 0) or 0
+                
+                # [M-3] VALIDATE POWER
+                validated_power, is_valid = validate_power_kw(raw_power, charger_id)
+                
+                if is_valid:
+                    power_valid_count += 1
+                else:
+                    power_invalid_count += 1
+                    power_validation_details.append({
+                        "charger_id": charger_id,
+                        "charger_name": address_info.get("Title", "Unknown"),
+                        "raw_power": raw_power,
+                        "validated_power": validated_power
+                    })
                 
                 # Categorize by power
-                if power_kw >= 150:
+                if validated_power >= 150:
                     rapid_dc += 1
-                elif power_kw >= 50:
+                elif validated_power >= 50:
                     fast_dc += 1
                 else:
                     slow_ac += 1
@@ -208,7 +287,9 @@ async def fetch_real_chargers(lat: float, lon: float, radius_km: float = 5.0) ->
                     "name": address_info.get("Title", "Unknown"),
                     "lat": address_info.get("Latitude"),
                     "lon": address_info.get("Longitude"),
-                    "power_kw": power_kw,
+                    "power_kw": validated_power,
+                    "power_validated": is_valid,
+                    "power_original": raw_power if is_valid else None,
                     "status": poi.get("StatusType", {}).get("Title", "Unknown"),
                     "operator": poi.get("OperatorInfo", {}).get("Title", "Unknown"),
                     "num_points": poi.get("NumberOfPoints", 1),
@@ -234,6 +315,13 @@ async def fetch_real_chargers(lat: float, lon: float, radius_km: float = 5.0) ->
         if parse_errors:
             logger.warning(f"{len(parse_errors)} chargers failed to parse")
         
+        # [M-3] Log power validation summary
+        if power_invalid_count > 0:
+            logger.warning(
+                f"Power validation: {power_valid_count}/{len(chargers)} valid "
+                f"({power_valid_count/len(chargers):.1%}), {power_invalid_count} invalid"
+            )
+        
         return {
             "success": True,
             "chargers": chargers,
@@ -247,6 +335,14 @@ async def fetch_real_chargers(lat: float, lon: float, radius_km: float = 5.0) ->
                 "total": len(data),
                 "parsed": len(chargers),
                 "failed": len(parse_errors)
+            },
+            "power_validation": {
+                "total_chargers": len(chargers),
+                "valid_power": power_valid_count,
+                "invalid_power": power_invalid_count,
+                "validation_rate": power_valid_count / len(chargers) if chargers else 1.0,
+                "default_used": power_invalid_count > 0,
+                "validation_details": power_validation_details[:5]
             }
         }
         
@@ -464,6 +560,7 @@ async def analyze_location_v2(location: LocationInput):
     Analyze location for EV charging station - Business-focused V2 API
     [C-1] Uses REAL DATA from all sources with Day 1 fixes
     [C-3] Validates all coordinates before processing
+    [M-3] Validates all charger power levels
     """
     
     # Extract coordinates
@@ -648,7 +745,7 @@ async def analyze_location_v2(location: LocationInput):
                 "demographics": "Estimated",
                 "grid": "Estimated"
             },
-            "fixes_applied": ["C-7", "C-4", "C-6", "C-1", "C-3"],
+            "fixes_applied": ["C-7", "C-4", "C-6", "C-1", "C-3", "M-3"],
             "mock_data": False  # ✅ NO MORE MOCK DATA!
         }
     }
@@ -670,6 +767,7 @@ async def v2_root():
             "FetchResult validation (C-4)",
             "AADT validation (C-6)",
             "Coordinate validation (C-3)",
+            "Power validation (M-3)",
             "Business-focused verdicts",
             "ROI calculations",
             "Actionable recommendations"
@@ -690,5 +788,5 @@ async def v2_health():
         "version": "2.0",
         "mock_data": False,
         "real_data": True,
-        "fixes_applied": ["C-7", "C-4", "C-6", "C-1", "C-3"]
+        "fixes_applied": ["C-7", "C-4", "C-6", "C-1", "C-3", "M-3"]
     }
