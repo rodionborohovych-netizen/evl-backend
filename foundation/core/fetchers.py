@@ -66,40 +66,52 @@ async def fetch_opencharge_map(
             data = response.json()
             elapsed_ms = (time.time() - start) * 1000
             
-            # Transform to our format
-            chargers = []
-            for poi in data:
-                try:
-                    chargers.append({
-                        "id": poi.get("ID"),
-                        "name": poi.get("AddressInfo", {}).get("Title", "Unknown"),
-                        "lat": poi.get("AddressInfo", {}).get("Latitude"),
-                        "lon": poi.get("AddressInfo", {}).get("Longitude"),
-                        "distance_km": poi.get("AddressInfo", {}).get("Distance"),
-                        "operator": poi.get("OperatorInfo", {}).get("Title", "Unknown"),
-                        "num_points": poi.get("NumberOfPoints", 0),
-                        "status": poi.get("StatusType", {}).get("Title", "Unknown"),
-                        "connections": [
-                            {
-                                "type": conn.get("ConnectionType", {}).get("Title"),
-                                "power_kw": conn.get("PowerKW", 0),
-                                "level": conn.get("Level", {}).get("Title"),
-                                "current": conn.get("CurrentType", {}).get("Title")
-                            }
-                            for conn in poi.get("Connections", [])
-                        ]
-                    })
-                except Exception as e:
-                    # Skip bad records
-                    continue
-            
-            return FetchResult(
-                success=True,
-                data=chargers,
-                source_id="openchargemap",
-                response_time_ms=elapsed_ms,
-                quality_score=1.0 if len(chargers) > 0 else 0.7  # Still good even if empty
-            )
+            --- a/foundation/core/fetchers.py
++++ b/foundation/core/fetchers.py
+@@ -93,20 +93,36 @@ async def fetch_opencharge_map(
+             elapsed_ms = (time.time() - start) * 1000
+             
+             # Transform to our format
+             chargers = []
++            parse_errors = []
++            
+             for poi in data:
+                 try:
+                     chargers.append({
+                         "id": poi.get("ID"),
+                         "name": poi.get("AddressInfo", {}).get("Title", "Unknown"),
+                         "lat": poi.get("AddressInfo", {}).get("Latitude"),
+                         "lon": poi.get("AddressInfo", {}).get("Longitude"),
+                         "distance_km": poi.get("AddressInfo", {}).get("Distance"),
+                         "operator": poi.get("OperatorInfo", {}).get("Title", "Unknown"),
+                         "num_points": poi.get("NumberOfPoints", 0),
+                         "status": poi.get("StatusType", {}).get("Title", "Unknown"),
+                         "connections": [
+                             {
+                                 "type": conn.get("ConnectionType", {}).get("Title"),
+                                 "power_kw": conn.get("PowerKW", 0),
+                                 "level": conn.get("Level", {}).get("Title"),
+                                 "current": conn.get("CurrentType", {}).get("Title")
+                             }
+                             for conn in poi.get("Connections", [])
+                         ]
+                     })
+                 except Exception as e:
+-                    # Skip bad records
+-                    continue
++                    # Log parsing failure with POI ID for debugging
++                    poi_id = poi.get("ID", "unknown")
++                    error_msg = f"Failed to parse OpenChargeMap POI {poi_id}: {str(e)}"
++                    print(f"⚠️  {error_msg}")
++                    parse_errors.append({"poi_id": poi_id, "error": str(e)})
++                    continue
++            
++            # Log summary if there were parsing errors
++            if parse_errors:
++                print(f"⚠️  OpenChargeMap: {len(parse_errors)} POIs failed to parse out of {len(data)} total")
++                print(f"   Successfully parsed: {len(chargers)} chargers")
+             
+             return FetchResult(
             
     except Exception as e:
         elapsed_ms = (time.time() - start) * 1000
