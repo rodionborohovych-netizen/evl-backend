@@ -1,8 +1,9 @@
 """
-V2 API - Business-Focused with REAL DATA
-==========================================
+V2 API - Business-Focused with REAL DATA + C-3 Validation
+===========================================================
 
 [C-1] Complete replacement of mock data with real analysis.
+[C-3] Coordinate validation for all inputs.
 Uses all Day 1 fixes: C-7 (logging), C-4 (validation), C-6 (AADT validation)
 """
 
@@ -30,6 +31,15 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 router_v2 = APIRouter()
+
+# ============================================================================
+# [C-3] Coordinate Validation Constants
+# ============================================================================
+
+MIN_LATITUDE = -90.0
+MAX_LATITUDE = 90.0
+MIN_LONGITUDE = -180.0
+MAX_LONGITUDE = 180.0
 
 # ============================================================================
 # Response Models
@@ -68,6 +78,65 @@ def distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
          math.sin(dlon/2)**2)
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
     return round(R * c, 2)
+
+
+def validate_coordinates(lat: float, lon: float, context: str = "unknown") -> tuple:
+    """
+    Validate latitude and longitude values.
+    [C-3] Returns (is_valid, error_message)
+    """
+    # Validate latitude
+    if not isinstance(lat, (int, float)):
+        error = f"Latitude must be numeric, got {type(lat).__name__}"
+        logger.warning(f"Invalid latitude in {context}: {error}")
+        return False, error
+    
+    if lat < MIN_LATITUDE or lat > MAX_LATITUDE:
+        error = f"Latitude must be between {MIN_LATITUDE} and {MAX_LATITUDE}, got {lat}"
+        logger.warning(f"Latitude out of range in {context}: {error}")
+        return False, error
+    
+    # Validate longitude
+    if not isinstance(lon, (int, float)):
+        error = f"Longitude must be numeric, got {type(lon).__name__}"
+        logger.warning(f"Invalid longitude in {context}: {error}")
+        return False, error
+    
+    if lon < MIN_LONGITUDE or lon > MAX_LONGITUDE:
+        error = f"Longitude must be between {MIN_LONGITUDE} and {MAX_LONGITUDE}, got {lon}"
+        logger.warning(f"Longitude out of range in {context}: {error}")
+        return False, error
+    
+    # Check for Null Island (common geocoding failure)
+    if round(lat, 6) == 0.0 and round(lon, 6) == 0.0:
+        error = "Invalid coordinates (0, 0) - likely geocoding failure"
+        logger.warning(f"Null Island coordinates in {context}")
+        return False, error
+    
+    return True, None
+
+
+def validate_radius(radius_km: float, context: str = "unknown") -> tuple:
+    """
+    Validate search radius.
+    [C-3] Returns (is_valid, error_message)
+    """
+    if not isinstance(radius_km, (int, float)):
+        error = f"Radius must be numeric, got {type(radius_km).__name__}"
+        logger.warning(f"Invalid radius in {context}: {error}")
+        return False, error
+    
+    if radius_km <= 0:
+        error = f"Radius must be positive, got {radius_km}"
+        logger.warning(f"Invalid radius in {context}: {error}")
+        return False, error
+    
+    if radius_km > 100:
+        error = f"Radius too large (max 100km), got {radius_km}"
+        logger.warning(f"Radius in {context}: {error}")
+        return False, error
+    
+    return True, None
 
 # ============================================================================
 # Real Data Fetchers (using the same logic as main.py)
@@ -394,6 +463,7 @@ async def analyze_location_v2(location: LocationInput):
     """
     Analyze location for EV charging station - Business-focused V2 API
     [C-1] Uses REAL DATA from all sources with Day 1 fixes
+    [C-3] Validates all coordinates before processing
     """
     
     # Extract coordinates
@@ -416,8 +486,18 @@ async def analyze_location_v2(location: LocationInput):
                 if data:
                     lat = float(data[0]["lat"])
                     lon = float(data[0]["lon"])
+                    
+                    # [C-3] VALIDATE GEOCODED COORDINATES
+                    is_valid, error = validate_coordinates(lat, lon, "V2 geocoding result")
+                    if not is_valid:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Geocoding returned invalid coordinates: {error}"
+                        )
                 else:
                     raise HTTPException(status_code=404, detail="Location not found")
+        except HTTPException:
+            raise  # Re-raise HTTPException as-is
         except Exception as e:
             logger.error(f"Geocoding failed: {e}")
             raise HTTPException(status_code=500, detail="Geocoding failed")
@@ -427,6 +507,16 @@ async def analyze_location_v2(location: LocationInput):
             status_code=400,
             detail="Provide either postcode or lat/lon coordinates"
         )
+    
+    # [C-3] VALIDATE COORDINATES
+    is_valid, error = validate_coordinates(lat, lon, "V2 user input")
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error)
+    
+    # [C-3] VALIDATE RADIUS
+    is_valid, error = validate_radius(radius_km, "V2 user input")
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error)
     
     logger.info(f"V2 Analysis: lat={lat}, lon={lon}, radius={radius_km}km")
     
@@ -558,7 +648,7 @@ async def analyze_location_v2(location: LocationInput):
                 "demographics": "Estimated",
                 "grid": "Estimated"
             },
-            "fixes_applied": ["C-7", "C-4", "C-6", "C-1"],
+            "fixes_applied": ["C-7", "C-4", "C-6", "C-1", "C-3"],
             "mock_data": False  # ✅ NO MORE MOCK DATA!
         }
     }
@@ -579,6 +669,7 @@ async def v2_root():
             "OpenChargeMap with logging (C-7)",
             "FetchResult validation (C-4)",
             "AADT validation (C-6)",
+            "Coordinate validation (C-3)",
             "Business-focused verdicts",
             "ROI calculations",
             "Actionable recommendations"
@@ -599,5 +690,5 @@ async def v2_health():
         "version": "2.0",
         "mock_data": False,
         "real_data": True,
-        "fixes_applied": ["C-7", "C-4", "C-6", "C-1"]
+        "fixes_applied": ["C-7", "C-4", "C-6", "C-1", "C-3"]
     }
