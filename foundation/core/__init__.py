@@ -7,9 +7,10 @@ Main components:
 - database: SQLAlchemy models for tracking
 - metadata: Provenance tracking for API calls
 - validation: Data contracts and quality checks
+- fetchers: Real data fetchers with graceful degradation
 
 Usage:
-    from foundation.core import track_fetch, validate_response
+    from foundation.core import track_fetch, validate_response, fetch_all_data
     
     @track_fetch("entsoe", "ENTSO-E Grid")
     @validate_response("entsoe")
@@ -55,8 +56,25 @@ from .validation import (
     DATA_CONTRACTS
 )
 
+# Fetchers
+from .fetchers import (
+    fetch_all_data,
+    FetchResult,
+    get_data_sources_summary,
+    fetch_opencharge_map,
+    fetch_postcode_data,
+    fetch_ons_demographics,
+    fetch_dft_vehicle_stats,
+    fetch_osm_facilities,
+    fetch_entsoe_grid,
+    fetch_national_grid_eso,
+    fetch_tomtom_traffic,
+    calculate_overall_quality_score
+)
+
 __version__ = "1.0.0"
 
+# SINGLE, COMPLETE __all__ DEFINITION
 __all__ = [
     # Database
     "init_database",
@@ -89,18 +107,18 @@ __all__ = [
     "calculate_quality_score",
     "ValidationError",
     "DATA_CONTRACTS",
-]
-# Add to imports:
-from .fetchers import (
-    fetch_all_data,
-    FetchResult,
-    get_data_sources_summary
-)
-
-# Add to __all__:
-__all__ = [
-    # ... existing exports ...
+    
+    # Fetchers
     "fetch_all_data",
-    "FetchResult", 
+    "FetchResult",
     "get_data_sources_summary",
+    "fetch_opencharge_map",
+    "fetch_postcode_data",
+    "fetch_ons_demographics",
+    "fetch_dft_vehicle_stats",
+    "fetch_osm_facilities",
+    "fetch_entsoe_grid",
+    "fetch_national_grid_eso",
+    "fetch_tomtom_traffic",
+    "calculate_overall_quality_score",
 ]
