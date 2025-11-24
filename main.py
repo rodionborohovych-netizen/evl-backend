@@ -1,23 +1,17 @@
 """
-EVL v10.1 + Day 1-5 Complete - FULLY INTEGRATED
-===============================================
+EVL v10.1 + Day 1-5 Complete - FULLY INTEGRATED + FRONTEND COMPATIBLE
+======================================================================
 
-Includes ALL enhancements:
-✅ Day 1: C-7 (parser logging), C-4 (validation), C-6 (AADT)
-✅ C-3: Coordinate validation
-✅ M-3: Power validation
-✅ Day 3: v2.2 enhancements (gaps, confidence, opportunities)
-✅ Day 4: Advanced analytics (comparison, history, trends)
-✅ Day 5: Production hardening (cache, monitor, health)
+CRITICAL FIX: Now accepts BOTH simple and complex request formats:
+- Simple: {"postcode": "SW1A 1AA", "radius_km": 5}
+- Complex: {"location": {"postcode": "SW1A 1AA"}, "radius_km": 5, ...}
 
-FIXED: Endpoint now accepts JSON body (not query parameters)
-
-This is a COMPLETE, PRODUCTION-READY system.
+This ensures compatibility with the enhanced frontend.
 """
 
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import httpx
 import os
 import math
@@ -56,15 +50,50 @@ app.add_middleware(
 )
 
 # ============================================================================
-# REQUEST MODELS
+# REQUEST MODELS - SUPPORTS BOTH SIMPLE AND COMPLEX FORMATS
 # ============================================================================
 
-class LocationInput(BaseModel):
-    """Input model for location analysis requests"""
+class SimpleLocationInput(BaseModel):
+    """Simple input model (flat structure)"""
     postcode: Optional[str] = None
     lat: Optional[float] = None
     lon: Optional[float] = None
     radius_km: float = 5.0
+
+class NestedLocation(BaseModel):
+    """Nested location object for complex format"""
+    postcode: Optional[str] = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+
+class PlannedInstallation(BaseModel):
+    """Planned installation details"""
+    charger_type: Optional[str] = "DC"
+    power_per_plug_kw: Optional[float] = 150.0
+    plugs: Optional[int] = 2
+
+class FinancialParams(BaseModel):
+    """Financial parameters"""
+    energy_cost_per_kwh: Optional[float] = 0.20
+    tariff_per_kwh: Optional[float] = 0.50
+    fixed_costs_per_month: Optional[float] = 500.0
+
+class AnalysisOptions(BaseModel):
+    """Analysis options"""
+    include_raw_sources: Optional[bool] = False
+
+class ComplexLocationInput(BaseModel):
+    """Complex input model (nested structure from frontend)"""
+    location: Optional[NestedLocation] = None
+    radius_km: float = Field(default=5.0)
+    planned_installation: Optional[PlannedInstallation] = None
+    financial_params: Optional[FinancialParams] = None
+    options: Optional[AnalysisOptions] = None
+    
+    # Also support flat structure
+    postcode: Optional[str] = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None
 
 # ============================================================================
 # VALIDATION CONSTANTS
@@ -393,6 +422,10 @@ async def fetch_opencharge_map(lat: float, lon: float, radius_km: float = 5.0) -
         logger.info(f"Parsed {len(chargers)}/{len(data)} chargers successfully")
         if parse_errors:
             logger.warning(f"{len(parse_errors)} chargers failed to parse")
+        
+        # M-3: Log power validation
+        if chargers:
+            logger.info(f"Power validation: {power_valid_count}/{len(chargers)} valid ({power_valid_count/len(chargers)*100:.1f}%)")
         
         return {
             "success": True,
@@ -751,22 +784,31 @@ def generate_enhanced_opportunities(
     return opportunities[:3]  # Return top 3
 
 # ============================================================================
-# MAIN ANALYSIS ENDPOINT - FIXED TO ACCEPT JSON BODY
+# MAIN ANALYSIS ENDPOINT - ACCEPTS BOTH SIMPLE AND COMPLEX INPUT
 # ============================================================================
 
 @app.post("/api/v2/analyze-location")
-async def analyze_location_v2(location: LocationInput):
+async def analyze_location_v2(request: ComplexLocationInput):
     """
-    Complete V2 analysis with ALL Day 3-5 enhancements
+    Complete V2 analysis - ACCEPTS BOTH SIMPLE AND COMPLEX REQUEST FORMATS
     
-    FIXED: Now accepts JSON body with LocationInput model
+    Simple format: {"postcode": "SW1A 1AA", "radius_km": 5}
+    Complex format: {"location": {"postcode": "SW1A 1AA"}, "radius_km": 5, ...}
     """
     
-    # Extract parameters from the model
-    postcode = location.postcode
-    lat = location.lat
-    lon = location.lon
-    radius_km = location.radius_km
+    # Extract parameters - handle both flat and nested formats
+    if request.location and request.location.postcode:
+        # Complex/nested format
+        postcode = request.location.postcode
+        lat = request.location.lat
+        lon = request.location.lon
+    else:
+        # Simple/flat format
+        postcode = request.postcode
+        lat = request.lat
+        lon = request.lon
+    
+    radius_km = request.radius_km
     
     start_time = time.time()
     
@@ -792,6 +834,7 @@ async def analyze_location_v2(location: LocationInput):
         except HTTPException:
             raise
         except Exception as e:
+            logger.error(f"Geocoding failed: {e}")
             raise HTTPException(status_code=500, detail="Geocoding failed")
     
     if not (lat and lon):
@@ -951,7 +994,8 @@ async def analyze_location_v2(location: LocationInput):
             "analyzed_at": datetime.now().isoformat(),
             "version": "2.2",
             "response_time_ms": round(duration_ms, 2),
-            "cache_used": _cache.stats()["hits"] > 0
+            "cache_used": _cache.stats()["hits"] > 0,
+            "request_format": "complex" if request.location else "simple"
         }
     }
 
@@ -969,7 +1013,8 @@ async def root():
             "✅ Real-time data (8 sources)",
             "✅ Day 1-5 fixes (C-7, C-4, C-6, C-3, M-3)",
             "✅ V2.2 enhancements (gaps, confidence, opportunities)",
-            "✅ Production caching and monitoring"
+            "✅ Production caching and monitoring",
+            "✅ Supports both simple and complex request formats"
         ],
         "endpoints": {
             "analyze": "/api/v2/analyze-location",
@@ -1003,7 +1048,8 @@ async def detailed_health():
             "Day 1-5 fixes",
             "V2.2 enhancements",
             "Caching",
-            "Monitoring"
+            "Monitoring",
+            "Flexible request format"
         ]
     }
 
@@ -1033,7 +1079,7 @@ async def startup_event():
     logger.info("✅ Day 5: Production (caching, monitoring)")
     logger.info("=" * 60)
     logger.info("🎯 System is PRODUCTION-READY")
-    logger.info("✅ Endpoint accepts JSON body (LocationInput model)")
+    logger.info("✅ Endpoint accepts BOTH simple and complex JSON formats")
     logger.info("=" * 60)
 
 if __name__ == "__main__":
