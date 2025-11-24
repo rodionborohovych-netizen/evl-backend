@@ -1,7 +1,26 @@
-fastapi
-uvicorn[standard]
-httpx
-pyyaml
-sqlalchemy>=2.0.0
+# EVL v10.1 - Python Dependencies
+# =================================
+
+# Web Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# HTTP Client
+httpx>=0.25.0
+
+# Data Validation
 pydantic>=2.0.0
-python-multipart
+typing_extensions>=4.0.0
+
+# Database
+sqlalchemy>=2.0.0
+
+# Configuration
+pyyaml>=6.0
+
+# File Upload Support
+python-multipart>=0.0.6
+
+# Optional: Better performance
+# orjson>=3.9.0
+# ujson>=5.8.0
