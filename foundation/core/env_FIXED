@@ -1,0 +1,33 @@
+# EVL Foundation Package - Environment Variables
+# ==============================================
+
+# Optional API keys (all work without keys, but provide better data with keys)
+
+# OpenChargeMap API Key (optional but recommended)
+# Get your free key at: https://openchargemap.org/site/develop/api
+OPENCHARGE_API_KEY=553131e9-33b0-49ee-834b-416fc9d4202a
+
+# ENTSO-E Transparency Platform API Key (optional)
+# Register at: https://transparency.entsoe.eu/
+ENTSOE_API_KEY=
+
+# TomTom Traffic API Key (optional)
+# Get your key at: https://developer.tomtom.com/
+TOMTOM_API_KEY=
+
+# Energy Map Ukraine API Key (optional, for Ukraine market analysis)
+ENERGY_MAP_UKRAINE_API_KEY=
+
+# Database Configuration (Railway will set DATABASE_URL automatically)
+# For local development, SQLite is used by default
+# DATABASE_URL will be set by Railway for PostgreSQL
+
+# Application Settings
+LOG_LEVEL=INFO
+ENV=production
+
+# Cache Settings
+CACHE_TTL_SECONDS=1800
+
+# Rate Limiting
+RATE_LIMIT_ENABLED=true
