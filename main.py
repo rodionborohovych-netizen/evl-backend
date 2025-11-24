@@ -10,6 +10,8 @@ Includes ALL enhancements:
 ✅ Day 4: Advanced analytics (comparison, history, trends)
 ✅ Day 5: Production hardening (cache, monitor, health)
 
+FIXED: Endpoint now accepts JSON body (not query parameters)
+
 This is a COMPLETE, PRODUCTION-READY system.
 """
 
@@ -52,6 +54,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ============================================================================
+# REQUEST MODELS
+# ============================================================================
+
+class LocationInput(BaseModel):
+    """Input model for location analysis requests"""
+    postcode: Optional[str] = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    radius_km: float = 5.0
 
 # ============================================================================
 # VALIDATION CONSTANTS
@@ -738,19 +751,22 @@ def generate_enhanced_opportunities(
     return opportunities[:3]  # Return top 3
 
 # ============================================================================
-# MAIN ANALYSIS ENDPOINT
+# MAIN ANALYSIS ENDPOINT - FIXED TO ACCEPT JSON BODY
 # ============================================================================
 
 @app.post("/api/v2/analyze-location")
-async def analyze_location_v2(
-    postcode: Optional[str] = None,
-    lat: Optional[float] = None,
-    lon: Optional[float] = None,
-    radius_km: float = 5.0
-):
+async def analyze_location_v2(location: LocationInput):
     """
     Complete V2 analysis with ALL Day 3-5 enhancements
+    
+    FIXED: Now accepts JSON body with LocationInput model
     """
+    
+    # Extract parameters from the model
+    postcode = location.postcode
+    lat = location.lat
+    lon = location.lon
+    radius_km = location.radius_km
     
     start_time = time.time()
     
@@ -1017,6 +1033,7 @@ async def startup_event():
     logger.info("✅ Day 5: Production (caching, monitoring)")
     logger.info("=" * 60)
     logger.info("🎯 System is PRODUCTION-READY")
+    logger.info("✅ Endpoint accepts JSON body (LocationInput model)")
     logger.info("=" * 60)
 
 if __name__ == "__main__":
