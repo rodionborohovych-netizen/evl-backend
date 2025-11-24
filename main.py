@@ -943,7 +943,7 @@ async def analyze_location_v2(request: ComplexLocationInput):
             "location": {
                 "lat": lat,
                 "lon": lon,
-                "postcode": postcode,
+                "postcode": postcode or "Unknown",
                 "radius_km": radius_km
             }
         },
